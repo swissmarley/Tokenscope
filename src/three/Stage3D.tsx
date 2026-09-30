@@ -11,6 +11,7 @@ import type { StageId } from '../pipeline/events';
 import { STAGE_ORDER, stageIndex } from '../pipeline/stages';
 import { useStore } from '../store/useStore';
 import { CameraRig } from './CameraRig';
+import { Courier } from './Courier';
 import { Hud } from './Hud';
 import { AttentionSet } from './sets/AttentionSet';
 import { EmbedSet } from './sets/EmbedSet';
@@ -87,6 +88,7 @@ function World() {
       <Grid position={[0, -0.05, 0]} args={[10, 10]} cellSize={2} cellThickness={0.6} sectionSize={10} sectionThickness={1.1} cellColor="#182246" sectionColor="#26305a" fadeDistance={120} fadeStrength={1.4} infiniteGrid />
       <Ambience stage={active} />
       <CameraRig stage={active} reduced={reduced} />
+      <Courier stage={active} />
       <Suspense fallback={null}>
         {STAGE_ORDER.map((s, i) =>
           Math.abs(i - cur) <= 1 ? (

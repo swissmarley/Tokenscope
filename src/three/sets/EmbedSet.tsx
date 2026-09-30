@@ -52,7 +52,7 @@ export function EmbedSet() {
   const { emb, tokens } = useStore(useShallow((s) => ({ emb: s.view.embedding, tokens: s.view.tokens?.tokens ?? NO_TOKENS })));
   const seq = useMemo(() => (emb ? findSeq('embedded') : null), [emb]);
   const cloud = useMemo(() => (emb ? pca3d(emb.vectors) : []), [emb]);
-  const start = useMemo(() => layoutRows(tokens, 3, 10, 0.3, 1.2), [tokens]);
+  const start = useMemo(() => layoutRows(tokens, 1.4, 10, 0.3, 1.2), [tokens]);
   const groups = useRef<Array<Group | null>>([]);
   const lines = useRef<Array<Group | null>>([]);
   const phaseRef = useRef(0);

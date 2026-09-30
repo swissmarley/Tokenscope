@@ -15,13 +15,16 @@ import { C, CLASS_3D, tileWidth } from '../theme';
 const NO_TOKENS: Token[] = [];
 const ROW_W = 24;
 
-/** Lay tiles out in centred rows. */
-export function layoutRows(tokens: readonly Token[], y: number, z: number, gap = 0.35, rowGap = 1.5): Array<[number, number, number]> {
+/**
+ * Lay tiles out in centred rows. Rows stack *upward* from `y` (the last row
+ * sits at `y`), so long sequences never sink below the floor.
+ */
+export function layoutRows(tokens: readonly Token[], y: number, z: number, gap = 0.35, rowGap = 1.5, rowWidth = ROW_W): Array<[number, number, number]> {
   const rows: Array<Array<{ i: number; w: number }>> = [[]];
   let x = 0;
   tokens.forEach((t, i) => {
     const w = tileWidth(displayText(t.text));
-    if (x + w > ROW_W && rows[rows.length - 1]!.length > 0) {
+    if (x + w > rowWidth && rows[rows.length - 1]!.length > 0) {
       rows.push([]);
       x = 0;
     }
@@ -29,12 +32,12 @@ export function layoutRows(tokens: readonly Token[], y: number, z: number, gap =
     x += w + gap;
   });
   const out: Array<[number, number, number]> = [];
-  const totalH = (rows.length - 1) * rowGap;
+  const nRows = rows.length;
   rows.forEach((row, r) => {
     const width = row.reduce((s, c) => s + c.w, 0) + gap * (row.length - 1);
     let cx = -width / 2;
     for (const c of row) {
-      out[c.i] = [cx + c.w / 2, y + totalH / 2 - r * rowGap, z];
+      out[c.i] = [cx + c.w / 2, y + (nRows - 1 - r) * rowGap, z];
       cx += c.w + gap;
     }
   });
@@ -46,7 +49,7 @@ export function TokenizeSet() {
   const { ev, prompt } = useStore(useShallow((s) => ({ ev: s.view.tokens, prompt: s.view.runStart?.prompt ?? '' })));
   const tokens = ev?.tokens ?? NO_TOKENS;
   const seq = useMemo(() => (ev ? findSeq('tokenized') : null), [ev]);
-  const positions = useMemo(() => layoutRows(tokens, 3.2, 0), [tokens]);
+  const positions = useMemo(() => layoutRows(tokens, 1.6, 0), [tokens]);
   const revealed = useRef(0);
   const [hovered, setHovered] = useState<number | null>(null);
   const rawText = useRef<Mesh>(null);

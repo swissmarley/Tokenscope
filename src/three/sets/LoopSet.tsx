@@ -38,7 +38,8 @@ export function LoopSet() {
   const chosen = it?.sampled?.token ?? null;
   const chosenPlaced = Boolean(it?.streamed) || (chosen !== null && generated.some((g) => g.index === chosen.index));
   const sequence = useMemo(() => [...prompt, ...generated], [prompt, generated]);
-  const positions = useMemo(() => layoutRows(sequence, 1.2, 11, 0.3, 1.3), [sequence]);
+  // Rows stack upward from just above the floor; a wider row keeps long runs to two or three rows.
+  const positions = useMemo(() => layoutRows(sequence, 1.0, 11, 0.3, 1.3, 34), [sequence]);
   const phaseIdx = Math.max(0, PHASES.findIndex((x) => x.id === loop.phase));
   const arcs = useRef<Array<Mesh | null>>([]);
   const marker = useRef<Mesh>(null);

@@ -5,7 +5,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { StageId } from '../pipeline/events';
+import { courierState } from './courierState';
 import { POSES, STAGE_X } from './theme';
+
+const look = new Vector3();
 
 /**
  * Flies the camera between sets when the stage changes, then hands control
@@ -38,10 +41,13 @@ export function CameraRig({ stage, reduced }: { stage: StageId | null; reduced: 
     const c = controls.current;
     if (!c || !transition.current.active) return;
     const d = Math.min(dt, 0.05);
-    easing.damp3(camera.position, desired.position, 0.7, d);
-    easing.damp3(c.target, desired.target, 0.7, d);
+    // While the courier is in the air, the camera glances toward it so the hand-off reads.
+    const bias = courierState.active ? Math.sin(courierState.u * Math.PI) * 0.45 : 0;
+    look.copy(desired.target).lerp(courierState.pos, bias);
+    easing.damp3(camera.position, desired.position, 0.75, d);
+    easing.damp3(c.target, look, 0.45, d);
     const settled = camera.position.distanceTo(desired.position) < 0.05 && c.target.distanceTo(desired.target) < 0.05;
-    if (settled && performance.now() - transition.current.since > 700) transition.current.active = false;
+    if (settled && performance.now() - transition.current.since > 700 && !courierState.active) transition.current.active = false;
   });
 
   return (
