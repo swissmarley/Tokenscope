@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/shallow';
 import { springs } from '../../design/motion';
 import type { Mode } from '../../pipeline/events';
 import { PRESETS } from '../../sim/presets';
-import { MODE_LABEL, useStore } from '../../store/useStore';
+import { MODE_LABEL, modeAvailability, useStore } from '../../store/useStore';
 import { playCue, primeAudio } from '../../audio/cues';
 import { IconButton } from '../common/IconButton';
 import { ChevronDownIcon, GearIcon, PanelIcon, SendIcon, SoundIcon, SoundOffIcon, StopIcon } from '../common/Icons';
@@ -27,8 +27,10 @@ function Logo() {
   );
 }
 
+const DOT: Record<string, string> = { ready: 'bg-ok', unavailable: 'bg-danger', unknown: 'bg-warn' };
+
 function ModeToggle() {
-  const { mode, setMode } = useStore(useShallow((s) => ({ mode: s.mode, setMode: s.setMode })));
+  const { mode, setMode, health } = useStore(useShallow((s) => ({ mode: s.mode, setMode: s.setMode, health: s.health })));
   return (
     <div data-tour="mode" role="radiogroup" aria-label="Event source" className="relative flex rounded-lg border border-line bg-surface-2 p-0.5">
       {MODES.map((m) => (
@@ -37,6 +39,7 @@ function ModeToggle() {
           type="button"
           role="radio"
           aria-checked={mode === m}
+          title={modeAvailability(m, health).detail}
           onClick={() => setMode(m)}
           className={
             'relative z-10 rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ' +
@@ -50,6 +53,7 @@ function ModeToggle() {
               className="absolute inset-0 -z-10 rounded-md bg-surface-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
             />
           )}
+          <span className={'mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ' + (DOT[modeAvailability(m, health).state] ?? 'bg-warn')} />
           {MODE_LABEL[m]}
         </button>
       ))}

@@ -10,7 +10,7 @@ interface Hook {
     seekTime(ms: number): void;
     startOf(i: number): number;
   };
-  useStore: { getState(): { setTourStep(s: number | null): void; view: { currentStage: string | null } } };
+  useStore: { getState(): { setTourStep(s: number | null): void; send(): Promise<void>; view: { currentStage: string | null } } };
 }
 
 declare global {
@@ -21,8 +21,9 @@ declare global {
 
 async function waitForRun(page: Page): Promise<void> {
   await page.goto('/');
-  await page.waitForFunction(() => window.__tokenscope?.scheduler.getState().sourceDone === true, null, { timeout: 30_000 });
   await page.evaluate(() => window.__tokenscope.useStore.getState().setTourStep(null));
+  await page.getByRole('button', { name: /Start in Mock/ }).click();
+  await page.waitForFunction(() => window.__tokenscope?.scheduler.getState().sourceDone === true, null, { timeout: 30_000 });
 }
 
 test('the mock run renders every stage without console errors', async ({ page }) => {

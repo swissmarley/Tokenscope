@@ -92,6 +92,9 @@ export class LabSource implements EventSource {
     };
 
     const runId = `lab-${Date.now().toString(36)}`;
+    // Small local models ramble; keep lab runs watchable.
+    const maxTokens = Math.min(settings.maxTokens, 64);
+    settings = { ...settings, model: 'local lab model (distilgpt2)', maxTokens };
     const body = buildRequestBody(prompt, settings);
     let meta: Meta | null = null;
     let promptTokens: Token[] = [];
@@ -120,7 +123,7 @@ export class LabSource implements EventSource {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         prompt,
-        max_tokens: settings.maxTokens,
+        max_tokens: maxTokens,
         temperature: settings.temperature,
         top_k: settings.topK,
         top_p: settings.topP,

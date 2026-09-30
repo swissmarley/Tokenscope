@@ -26,11 +26,9 @@ export default function App() {
   useKeyboard();
   useSoundCues();
 
-  // First load: run the canned Mock example so the app is never empty.
+  // Probe the proxy once so the welcome screen can say which modes are ready.
   useEffect(() => {
-    const s = useStore.getState();
-    if (s.transport.eventCount === 0) void s.send();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void useStore.getState().checkHealth();
   }, []);
 
   return (

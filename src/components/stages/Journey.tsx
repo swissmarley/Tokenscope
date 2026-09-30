@@ -3,6 +3,7 @@ import { LayoutGroup, useReducedMotion } from 'framer-motion';
 import { useShallow } from 'zustand/shallow';
 import { STAGES, stageIndex } from '../../pipeline/stages';
 import { useStore } from '../../store/useStore';
+import { Welcome } from '../layout/Welcome';
 import { StageFrame, type StageStatus } from './StageFrame';
 import { SCENES } from './scenes';
 
@@ -59,17 +60,12 @@ export function Journey() {
   return (
     <div ref={scrollRef} className="grid-bg relative min-h-0 overflow-y-auto">
       {eventCount === 0 && (
-        <div className="pointer-events-none absolute inset-x-0 top-6 z-10 flex justify-center">
-          <div className="panel pointer-events-auto px-6 py-4 text-center">
-            <div className="text-[15px] font-medium">Nothing has been sent yet.</div>
-            <div className="mt-1 text-[13px] text-text-muted">
-              Pick an example prompt or type your own, then press Send to watch the pipeline in slow motion.
-            </div>
-          </div>
+        <div className="px-4 py-8 lg:px-8">
+          <Welcome />
         </div>
       )}
       <LayoutGroup>
-      <div className="mx-auto flex max-w-[1180px] flex-col gap-4 px-4 py-6 pb-[40vh] lg:px-8">
+      <div className={'mx-auto flex max-w-[1180px] flex-col gap-4 px-4 py-6 pb-[40vh] lg:px-8 ' + (eventCount === 0 ? 'opacity-40' : '')}>
         {STAGES.map((s, i) => {
           const status: StageStatus =
             s.id === currentStage ? 'active' : reached[s.id] && i < currentIdx ? 'done' : reached[s.id] ? 'done' : 'upcoming';

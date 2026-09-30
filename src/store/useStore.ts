@@ -72,9 +72,34 @@ const defaultPrompt =
 /** The single scheduler instance; the store mirrors its state. */
 export const scheduler = new Scheduler({ speed: prefs.speed ?? DEFAULT_SPEED, autoPauseOnStage: prefs.autoPause ?? false });
 
+export interface HealthInfo {
+  ok: boolean;
+  provider: string;
+  hasKey: boolean;
+  model: string | null;
+  lab: { ok: boolean; model?: string; nLayers?: number };
+}
+
+export type Availability = 'ready' | 'unavailable' | 'unknown';
+
+export function modeAvailability(mode: Mode, health: HealthInfo | null): { state: Availability; detail: string } {
+  if (mode === 'mock') return { state: 'ready', detail: 'Canned run — always available' };
+  if (!health) return { state: 'unknown', detail: 'Proxy not reachable — start it with npm run dev' };
+  if (mode === 'live') {
+    return health.hasKey
+      ? { state: 'ready', detail: `${health.provider} · ${health.model ?? 'default model'}` }
+      : { state: 'unavailable', detail: `No API key for ${health.provider}: copy .env.example to server/.env` };
+  }
+  return health.lab.ok
+    ? { state: 'ready', detail: `${health.lab.model ?? 'model'} loaded (${health.lab.nLayers ?? '?'} layers)` }
+    : { state: 'unavailable', detail: 'Lab server not running: npm run lab' };
+}
+
 export interface AppState {
   transport: SchedulerState;
   view: ViewState;
+  health: HealthInfo | null;
+  checkHealth: () => Promise<void>;
 
   mode: Mode;
   prompt: string;
@@ -188,6 +213,15 @@ export const useStore = create<AppState>()(
     return {
       transport: scheduler.getState(),
       view: emptyView(),
+      health: null,
+      checkHealth: async () => {
+        try {
+          const res = await fetch(`${get().proxyUrl.replace(/\/$/, '')}/health`, { signal: AbortSignal.timeout(3000) });
+          set({ health: res.ok ? ((await res.json()) as HealthInfo) : null });
+        } catch {
+          set({ health: null });
+        }
+      },
 
       mode: prefs.mode ?? 'mock',
       prompt: prefs.prompt ?? defaultPrompt,
@@ -213,8 +247,13 @@ export const useStore = create<AppState>()(
         persist();
       },
       setMode: (mode) => {
+        const changed = mode !== get().mode;
         set({ mode });
         persist();
+        if (changed && get().transport.eventCount > 0) {
+          set({ notice: `Switched to ${MODE_LABEL[mode]}. Press Send to run the prompt through it.` });
+        }
+        if (mode !== 'mock') void get().checkHealth();
       },
       setSettings: (patch) => {
         set({ settings: { ...get().settings, ...patch } });
@@ -223,6 +262,7 @@ export const useStore = create<AppState>()(
       setProxyUrl: (proxyUrl) => {
         set({ proxyUrl });
         persist();
+        void get().checkHealth();
       },
 
       send: async () => {
