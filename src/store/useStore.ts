@@ -17,6 +17,7 @@ import { deleteRun, listRuns, loadRun, saveRun, summarize, type RunSummary } fro
 import { DEFAULT_PRESET_ID, PRESETS } from '../sim/presets';
 
 export type ExplainLevel = 'simple' | 'math';
+export type ViewMode = 'cinema' | 'detail';
 
 export const DEFAULT_SETTINGS: Settings = {
   model: 'claude-sonnet-5-5',
@@ -44,6 +45,7 @@ interface Prefs {
   proxyUrl: string;
   prompt: string;
   tourDone: boolean;
+  viewMode: ViewMode;
 }
 
 const PREFS_KEY = 'tokenscope:prefs:v1';
@@ -112,6 +114,15 @@ export interface AppState {
   historyOpen: boolean;
 
   explainLevel: ExplainLevel;
+  viewMode: ViewMode;
+  setViewMode: (m: ViewMode) => void;
+  /** 3-D attention picker: null layer = follow the pipeline. */
+  attnLayer: number | null;
+  attnHead: number;
+  setAttn: (sel: { layer?: number | null; head?: number }) => void;
+  /** 3-D sampling sliders; null = the run's own settings. */
+  samplingOverride: { temperature: number; topK: number; topP: number } | null;
+  setSamplingOverride: (o: { temperature: number; topK: number; topP: number } | null) => void;
   inspectorOpen: boolean;
   /** Event pinned in the inspector; null = follow the latest. */
   selectedSeq: number | null;
@@ -207,6 +218,7 @@ export const useStore = create<AppState>()(
         proxyUrl: s.proxyUrl,
         prompt: s.prompt,
         tourDone: s.tourStep === null,
+        viewMode: s.viewMode,
       });
     };
 
@@ -234,6 +246,20 @@ export const useStore = create<AppState>()(
       historyOpen: false,
 
       explainLevel: prefs.explainLevel ?? 'simple',
+      viewMode: prefs.viewMode ?? 'cinema',
+      setViewMode: (viewMode) => {
+        set({ viewMode });
+        persist();
+      },
+      attnLayer: null,
+      attnHead: 0,
+      setAttn: (sel) =>
+        set((s) => ({
+          attnLayer: sel.layer === undefined ? s.attnLayer : sel.layer,
+          attnHead: sel.head === undefined ? s.attnHead : sel.head,
+        })),
+      samplingOverride: null,
+      setSamplingOverride: (samplingOverride) => set({ samplingOverride }),
       inspectorOpen: false,
       selectedSeq: null,
       focusedStage: null,
@@ -273,7 +299,7 @@ export const useStore = create<AppState>()(
         abortRef = controller;
         pending = [];
         scheduler.reset();
-        set({ running: true, error: null, selectedSeq: null, focusedStage: null, historyOpen: false });
+        set({ running: true, error: null, selectedSeq: null, focusedStage: null, historyOpen: false, attnLayer: null, samplingOverride: null });
         const factory = SOURCE_FACTORIES[mode] ?? SOURCE_FACTORIES.mock;
         const source = factory ? factory(proxyUrl) : new MockSource();
         if (source.kind !== mode) {

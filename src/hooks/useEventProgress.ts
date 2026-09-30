@@ -19,6 +19,28 @@ export function useEventProgress(seq: number | null | undefined): number {
   });
 }
 
+/** Same as the hook, but imperative — for per-frame reads inside useFrame. */
+export function progressOf(seq: number | null | undefined): number {
+  if (seq === null || seq === undefined) return 0;
+  const { cursor, virtualTime } = useStore.getState().transport;
+  if (cursor < seq) return 0;
+  if (cursor > seq) return 1;
+  const ev = scheduler.events[seq];
+  if (!ev || ev.baseDurationMs <= 0) return 1;
+  return clamp01((virtualTime - scheduler.startOf(seq)) / ev.baseDurationMs);
+}
+
+/** Progress of whatever event the cursor is on, imperatively. */
+export function currentProgress(): number {
+  return progressOf(useStore.getState().transport.cursor);
+}
+
+/** First event index of a type (optionally step), or null. */
+export function findSeq(type: string, step?: number): number | null {
+  const i = scheduler.events.findIndex((e) => e.type === type && (step === undefined || e.step === step));
+  return i >= 0 ? i : null;
+}
+
 /** Map progress onto a sub-window [a, b] of the hold. */
 export function window01(p: number, a: number, b: number): number {
   return clamp01((p - a) / Math.max(1e-6, b - a));

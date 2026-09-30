@@ -11,6 +11,7 @@ import { TopBar } from './components/layout/TopBar';
 import { Tour } from './components/layout/Tour';
 import { TransportBar } from './components/layout/TransportBar';
 import { Journey } from './components/stages/Journey';
+import { Stage3D } from './three/Stage3D';
 
 function LiveRegion() {
   const stage = useStore((s) => s.view.currentStage);
@@ -25,6 +26,7 @@ function LiveRegion() {
 export default function App() {
   useKeyboard();
   useSoundCues();
+  const viewMode = useStore((s) => s.viewMode);
 
   // Probe the proxy once so the welcome screen can say which modes are ready.
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function App() {
       <TopBar />
       <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[236px_minmax(0,1fr)_auto]">
         <ProgressRail />
-        <Journey />
+        {viewMode === 'cinema' ? <Stage3D /> : <Journey />}
         <Inspector />
       </div>
       <TransportBar />

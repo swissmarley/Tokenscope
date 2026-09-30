@@ -61,6 +61,32 @@ function ModeToggle() {
   );
 }
 
+function ViewToggle() {
+  const { mode, set } = useStore(useShallow((s) => ({ mode: s.viewMode, set: s.setViewMode })));
+  const opts = [
+    { id: 'cinema', label: '3D', title: 'Cinematic 3-D world' },
+    { id: 'detail', label: 'Detail', title: 'Stage-by-stage 2-D scenes' },
+  ] as const;
+  return (
+    <div role="radiogroup" aria-label="View" className="relative flex rounded-lg border border-line bg-surface-2 p-0.5">
+      {opts.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          role="radio"
+          aria-checked={mode === o.id}
+          title={o.title}
+          onClick={() => set(o.id)}
+          className={'relative z-10 rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ' + (mode === o.id ? 'text-text' : 'text-text-muted hover:text-text')}
+        >
+          {mode === o.id && <motion.span layoutId="view-pill" transition={springs.snappy} className="absolute inset-0 -z-10 rounded-md bg-phase-output/20 shadow-[inset_0_0_0_1px_rgb(251_191_36/0.4)]" />}
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ExplainToggle() {
   const { level, set } = useStore(useShallow((s) => ({ level: s.explainLevel, set: s.setExplainLevel })));
   const opts = [
@@ -204,6 +230,7 @@ export function TopBar() {
       </form>
       <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-0">
         <ModeToggle />
+        <ViewToggle />
         <span className="hidden xl:inline-flex">
           <SpeedChip />
         </span>

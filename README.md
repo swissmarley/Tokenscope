@@ -78,6 +78,19 @@ amber badge**; real data gets a green badge. Nothing simulated is ever presented
 Slow-motion *timing* is always a presentation choice (`baseDurationMs` per event); the `t` field on every event is the
 wall-clock time the source observed.
 
+## Two views of the same run
+
+- **3D (default)** — one continuous WebGL world (react-three-fiber + bloom). Each stage is a "set" laid out along a path in
+  space; the camera flies between sets as the pipeline advances, and inside a set you can drag to orbit, scroll to zoom and
+  hover objects. Sets: the stamped envelope and neon packet track; token tiles shattering into rows; the 3-D PCA cloud over a
+  rippling positional-wave floor; the translucent block tower with its residual beam; token pillars with attention arcs and
+  a bar-field "terrain" of weights (layer/head picker in the HUD); the instanced KV-cache grid; the probability skyline with
+  a rolling die and live temperature / top-k / top-p; the phase ring of the autoregressive loop; and chunks riding the wire
+  into the chat panel. Everything is driven by the same event stream, so pause, step and scrub freeze the world exactly.
+- **Detail** — the stage-by-stage 2-D scenes with the full annotations, heatmaps, matrices and callouts.
+
+Toggle between them in the top bar. Both share the transport bar, rail, inspector and history.
+
 ## Using it
 
 - **Top bar**: message, example prompts, Send, mode toggle, speed, "I'm new / Math" annotation depth, sound cues, run history, settings, inspector.
