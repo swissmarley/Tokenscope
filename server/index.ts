@@ -7,8 +7,9 @@ import { openai } from './providers/openai';
 import type { ChatRequest, Provider } from './providers/types';
 import { openSse } from './sse';
 
-// The key lives in server/.env and never leaves this process.
+// The key lives in server/.env (or the project-root .env) and never leaves this process.
 dotenv.config({ path: fileURLToPath(new URL('./.env', import.meta.url)) });
+dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
 const PORT = Number(process.env.PORT ?? 8787);
 const PROVIDERS: Record<string, Provider> = { anthropic, openai };

@@ -78,7 +78,17 @@ async function streamAnthropic(cfg: StreamConfig, req: ChatRequest, send: Send, 
   };
   if (cfg.fromBrowser) headers['anthropic-dangerous-direct-browser-access'] = 'true';
 
-  const res = await fetch(`${base}/v1/messages`, { method: 'POST', headers, body: JSON.stringify(body), signal });
+  let res = await fetch(`${base}/v1/messages`, { method: 'POST', headers, body: JSON.stringify(body), signal });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    // Newer models reject `temperature`; the knob still drives the (illustrative) sampling scene.
+    if (res.status === 400 && /temperature/i.test(text) && 'temperature' in body) {
+      delete body.temperature;
+      res = await fetch(`${base}/v1/messages`, { method: 'POST', headers, body: JSON.stringify(body), signal });
+    } else {
+      throw new Error(`Anthropic ${res.status}: ${text.slice(0, 400)}`);
+    }
+  }
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => '');
     throw new Error(`Anthropic ${res.status}: ${text.slice(0, 400)}`);

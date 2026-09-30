@@ -75,7 +75,7 @@ export class LiveSource implements EventSource {
 
     const handle = (event: StreamEventName | string, data: unknown): void => {
       if (signal.aborted) return;
-      onFirstByte();
+      if (event !== 'error') onFirstByte();
       switch (event) {
         case 'meta': {
           const meta = data as MetaData;
