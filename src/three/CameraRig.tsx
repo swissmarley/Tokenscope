@@ -9,12 +9,16 @@ import { courierState } from './courierState';
 import { POSES, STAGE_X } from './theme';
 
 const look = new Vector3();
+const autoPos = new Vector3();
+const offset = new Vector3();
 
 /**
  * Flies the camera between sets when the stage changes, then hands control
- * to orbit so the viewer can look around. Honors reduced motion by snapping.
+ * to orbit so the viewer can look around. In the fly-through, the camera
+ * keeps moving on its own: a slow orbit with a gentle dolly and bob.
+ * Honors reduced motion by snapping and skipping the auto moves.
  */
-export function CameraRig({ stage, reduced }: { stage: StageId | null; reduced: boolean }) {
+export function CameraRig({ stage, reduced, cinematic }: { stage: StageId | null; reduced: boolean; cinematic: boolean }) {
   const controls = useRef<OrbitControlsImpl>(null);
   const { camera } = useThree();
   const s = stage ?? 'compose';
@@ -27,6 +31,7 @@ export function CameraRig({ stage, reduced }: { stage: StageId | null; reduced: 
     };
   }, [s]);
   const transition = useRef({ active: true, since: 0 });
+  const autoClock = useRef(0);
 
   useEffect(() => {
     transition.current = { active: true, since: performance.now() };
@@ -37,10 +42,36 @@ export function CameraRig({ stage, reduced }: { stage: StageId | null; reduced: 
     }
   }, [desired, reduced, camera]);
 
+  // Starting the fly-through cuts straight to the first set instead of flying back over empty space.
+  useEffect(() => {
+    if (!cinematic) return;
+    autoClock.current = 0;
+    camera.position.copy(desired.position);
+    controls.current?.target.copy(desired.target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cinematic]);
+
   useFrame((_, dt) => {
     const c = controls.current;
-    if (!c || !transition.current.active) return;
+    if (!c) return;
     const d = Math.min(dt, 0.05);
+    if (cinematic && !reduced) {
+      // Auto camera: orbit slowly around the set's target, dolly in and out, bob a little.
+      autoClock.current += d;
+      const t = autoClock.current;
+      const yaw = Math.sin(t * 0.13) * 0.55;
+      const radius = 1 + 0.08 * Math.sin(t * 0.07 + 1);
+      const bob = 0.8 * Math.sin(t * 0.09);
+      offset.copy(desired.position).sub(desired.target);
+      offset.applyAxisAngle(new Vector3(0, 1, 0), yaw).multiplyScalar(radius);
+      autoPos.copy(desired.target).add(offset).add(new Vector3(0, bob, 0));
+      const bias = courierState.active ? Math.sin(courierState.u * Math.PI) * 0.45 : 0;
+      look.copy(desired.target).lerp(courierState.pos, bias);
+      easing.damp3(camera.position, autoPos, 0.7, d);
+      easing.damp3(c.target, look, 0.45, d);
+      return;
+    }
+    if (!transition.current.active) return;
     // While the courier is in the air, the camera glances toward it so the hand-off reads.
     const bias = courierState.active ? Math.sin(courierState.u * Math.PI) * 0.45 : 0;
     look.copy(desired.target).lerp(courierState.pos, bias);
@@ -54,6 +85,7 @@ export function CameraRig({ stage, reduced }: { stage: StageId | null; reduced: 
     <OrbitControls
       ref={controls}
       makeDefault
+      enabled={!cinematic}
       enablePan={false}
       enableDamping
       dampingFactor={0.08}

@@ -17,6 +17,7 @@ export function useKeyboard(): void {
       const s = useStore.getState();
       if (ev.key === 'Escape') {
         if (s.settingsOpen) s.setSettingsOpen(false);
+        else if (s.cinematic) s.stopCinematic();
         else if (s.inspectorOpen) s.toggleInspector(false);
         return;
       }

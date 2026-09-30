@@ -91,6 +91,30 @@ wall-clock time the source observed.
 
 Toggle between them in the top bar. Both share the transport bar, rail, inspector and history.
 
+### Fly-through
+
+Press **Fly-through** in the top bar (3D view) to replay the whole run from the start as a cinematic: letterboxed, the
+camera orbits and dollies inside each set on its own and flies between sets with the courier token. `Esc` or grabbing the
+world hands the camera back. Playback speed is whatever the transport is set to — 0.25× is a four-minute tour, 1× about a minute.
+
+## Connections: proxy or direct
+
+| | Through the proxy (default in dev) | Direct from this browser (default on GitHub Pages) |
+|---|---|---|
+| Where the key lives | `server/.env`, read by the Node proxy | your browser's `localStorage`, entered in **Settings → Connection** |
+| Live API | browser → `/api/chat` → provider | browser → provider (Anthropic's CORS opt-in header, or any OpenAI-compatible endpoint) |
+| Lab model | browser → `/api/lab/run` → Python server | browser → `http://localhost:8788` directly (browsers treat localhost as a trustworthy origin even from an https page) |
+
+Direct mode is what makes a static deployment useful, but read the warning in Settings: anyone who can open that browser
+profile can read the key, so use one you can rotate and never on a shared machine. "Forget" clears it.
+
+## Deploying to GitHub Pages
+
+`.github/workflows/pages.yml` builds on every push to `main` with `VITE_STATIC=true` (so the app defaults to direct
+connections) and `BASE_PATH=/<repo>/`, then publishes `dist/` with `actions/deploy-pages`. In the repository settings set
+**Pages → Source → GitHub Actions** once. Mock mode works out of the box; Live needs a key entered in Settings; Lab needs the
+Python server running on the visitor's own machine.
+
 ## Using it
 
 - **Top bar**: message, example prompts, Send, mode toggle, speed, "I'm new / Math" annotation depth, sound cues, run history, settings, inspector.

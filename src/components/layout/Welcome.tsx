@@ -31,10 +31,21 @@ const DOT: Record<string, string> = { ready: 'bg-ok', unavailable: 'bg-danger', 
 
 /** First screen: pick a source and a prompt, then start the journey. */
 export function Welcome() {
-  const { mode, setMode, health, prompt, setPrompt, send, running } = useStore(
-    useShallow((s) => ({ mode: s.mode, setMode: s.setMode, health: s.health, prompt: s.prompt, setPrompt: s.setPrompt, send: s.send, running: s.running })),
+  const { mode, setMode, health, prompt, setPrompt, send, running, conn, setSettingsOpen } = useStore(
+    useShallow((s) => ({
+      mode: s.mode,
+      setMode: s.setMode,
+      health: s.health,
+      prompt: s.prompt,
+      setPrompt: s.setPrompt,
+      send: s.send,
+      running: s.running,
+      conn: s.connection,
+      setSettingsOpen: s.setSettingsOpen,
+    })),
   );
-  const avail = modeAvailability(mode, health);
+  const openSettings = (): void => setSettingsOpen(true);
+  const avail = modeAvailability(mode, health, conn);
   const canStart = prompt.trim().length > 0 && avail.state !== 'unavailable' && !running;
 
   return (
@@ -49,7 +60,7 @@ export function Welcome() {
 
       <div className="grid gap-3 md:grid-cols-3">
         {MODES.map((m) => {
-          const a = modeAvailability(m.id, health);
+          const a = modeAvailability(m.id, health, conn);
           const on = mode === m.id;
           return (
             <button
@@ -119,7 +130,14 @@ export function Welcome() {
             <SendIcon width={15} height={15} /> Start in {MODE_LABEL[mode]}
           </button>
         </form>
-        {avail.state === 'unavailable' && <p className="mt-2 text-[12px] text-danger">{avail.detail}</p>}
+        {avail.state === 'unavailable' && (
+          <p className="mt-2 flex items-center gap-3 text-[12px] text-danger">
+            {avail.detail}
+            <button type="button" onClick={openSettings} className="rounded-md border border-line px-2 py-0.5 text-text-muted hover:text-text">
+              Open Settings
+            </button>
+          </p>
+        )}
         {mode === 'mock' && !PRESETS.some((p) => p.prompt === prompt.trim()) && prompt.trim() && (
           <p className="mt-2 text-[12px] text-text-faint">Mock mode can only answer the example prompts; your text will get a canned reply. Use Live or Lab for a real answer.</p>
         )}

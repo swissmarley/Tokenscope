@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useState } from 'react';
 import { useShallow } from 'zustand/shallow';
 import { springs, tween } from '../../design/motion';
 import { useStore } from '../../store/useStore';
@@ -18,22 +19,105 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 const inputCls =
   'mono h-9 w-full rounded-lg border border-line bg-surface px-3 text-[12.5px] text-text focus:border-phase-input/60 focus:outline-none';
 
+function ConnectionSection() {
+  const { conn, setConn, proxyUrl, setProxyUrl } = useStore(
+    useShallow((s) => ({ conn: s.connection, setConn: s.setConnection, proxyUrl: s.proxyUrl, setProxyUrl: s.setProxyUrl })),
+  );
+  const [showKey, setShowKey] = useState(false);
+  const direct = conn.mode === 'direct';
+  return (
+    <div className="rounded-lg border border-line bg-surface-2/60 p-3">
+      <div className="mb-2 text-[11px] font-semibold tracking-[0.1em] text-text-muted uppercase">Connection</div>
+      <div role="radiogroup" aria-label="Connection mode" className="mb-3 grid grid-cols-2 gap-2">
+        {(
+          [
+            { id: 'proxy', label: 'Through the proxy', hint: 'Key lives in server/.env. Best for local dev.' },
+            { id: 'direct', label: 'Direct from this browser', hint: 'Your key stays in this browser. Works on static hosting.' },
+          ] as const
+        ).map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            role="radio"
+            aria-checked={conn.mode === o.id}
+            onClick={() => setConn({ mode: o.id })}
+            className={'rounded-lg border p-2.5 text-left ' + (conn.mode === o.id ? 'border-phase-input/70 bg-phase-input/10' : 'border-line hover:border-line-strong')}
+          >
+            <div className="text-[12.5px] font-medium text-text">{o.label}</div>
+            <div className="mt-0.5 text-[11px] text-text-muted">{o.hint}</div>
+          </button>
+        ))}
+      </div>
+      {direct ? (
+        <div className="grid gap-3">
+          <p className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-[11.5px] leading-relaxed text-warn">
+            The key is stored only in this browser's localStorage and sent only to the provider you choose. Anyone who can open this browser profile can read it — use a key you can rotate, and never on a shared machine.
+          </p>
+          <div className="grid grid-cols-[130px_1fr] gap-3">
+            <Field label="Provider">
+              <select className={inputCls} value={conn.provider} onChange={(e) => setConn({ provider: e.target.value as 'anthropic' | 'openai' })}>
+                <option value="anthropic">Anthropic</option>
+                <option value="openai">OpenAI-compatible</option>
+              </select>
+            </Field>
+            <Field label="API key" hint={conn.provider === 'openai' ? 'optional for local servers' : 'sk-ant-…'}>
+              <div className="flex gap-1">
+                <input
+                  type={showKey ? 'text' : 'password'}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className={inputCls}
+                  value={conn.apiKey}
+                  onChange={(e) => setConn({ apiKey: e.target.value.trim() })}
+                  placeholder="paste your key"
+                />
+                <button type="button" onClick={() => setShowKey((v) => !v)} className="shrink-0 rounded-lg border border-line px-2 text-[11px] text-text-muted hover:text-text">
+                  {showKey ? 'hide' : 'show'}
+                </button>
+                {conn.apiKey && (
+                  <button type="button" onClick={() => setConn({ apiKey: '' })} className="shrink-0 rounded-lg border border-danger/40 px-2 text-[11px] text-danger hover:bg-danger/10">
+                    forget
+                  </button>
+                )}
+              </div>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Base URL" hint={conn.provider === 'openai' ? 'e.g. http://localhost:11434/v1' : 'leave empty for api.anthropic.com'}>
+              <input className={inputCls} value={conn.baseUrl} onChange={(e) => setConn({ baseUrl: e.target.value.trim() })} placeholder="default" />
+            </Field>
+            <Field label="Lab server URL" hint="python server, called directly">
+              <input className={inputCls} value={conn.labUrl} onChange={(e) => setConn({ labUrl: e.target.value.trim() })} />
+            </Field>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Proxy URL" hint="/api in dev">
+            <input className={inputCls} value={proxyUrl} onChange={(e) => setProxyUrl(e.target.value)} />
+          </Field>
+          <p className="self-end text-[11px] leading-relaxed text-text-muted">
+            The browser never sees the key: put it in <span className="mono text-text">server/.env</span> and the proxy adds it.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SettingsModal() {
-  const { open, setOpen, settings, setSettings, proxyUrl, setProxyUrl, cameraFollow, setCameraFollow, soundOn, setSoundOn } =
-    useStore(
-      useShallow((s) => ({
-        open: s.settingsOpen,
-        setOpen: s.setSettingsOpen,
-        settings: s.settings,
-        setSettings: s.setSettings,
-        proxyUrl: s.proxyUrl,
-        setProxyUrl: s.setProxyUrl,
-        cameraFollow: s.cameraFollow,
-        setCameraFollow: s.setCameraFollow,
-        soundOn: s.soundOn,
-        setSoundOn: s.setSoundOn,
-      })),
-    );
+  const { open, setOpen, settings, setSettings, cameraFollow, setCameraFollow, soundOn, setSoundOn } = useStore(
+    useShallow((s) => ({
+      open: s.settingsOpen,
+      setOpen: s.setSettingsOpen,
+      settings: s.settings,
+      setSettings: s.setSettings,
+      cameraFollow: s.cameraFollow,
+      setCameraFollow: s.setCameraFollow,
+      soundOn: s.soundOn,
+      setSoundOn: s.setSoundOn,
+    })),
+  );
   return (
     <AnimatePresence>
       {open && (
@@ -54,7 +138,7 @@ export function SettingsModal() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 8 }}
             transition={springs.snappy}
-            className="panel w-full max-w-lg"
+            className="panel w-full max-w-xl"
           >
             <div className="flex items-center gap-3 border-b border-line px-5 py-3.5">
               <h2 className="text-[15px] font-semibold tracking-tight">Settings</h2>
@@ -62,19 +146,11 @@ export function SettingsModal() {
                 <CloseIcon width={15} height={15} />
               </IconButton>
             </div>
-            <div className="grid gap-4 px-5 py-4">
-              <p className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-[12px] text-text-muted">
-                The API key is never entered here. Put it in <span className="mono text-text">server/.env</span>; the
-                browser only ever talks to the proxy below.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Model" hint="sent as model">
-                  <input className={inputCls} value={settings.model} onChange={(e) => setSettings({ model: e.target.value })} />
-                </Field>
-                <Field label="Proxy URL" hint="/api in dev">
-                  <input className={inputCls} value={proxyUrl} onChange={(e) => setProxyUrl(e.target.value)} />
-                </Field>
-              </div>
+            <div className="grid max-h-[75vh] gap-4 overflow-y-auto px-5 py-4">
+              <ConnectionSection />
+              <Field label="Model" hint="sent as model">
+                <input className={inputCls} value={settings.model} onChange={(e) => setSettings({ model: e.target.value })} />
+              </Field>
               <Field label="System prompt">
                 <textarea
                   className={inputCls + ' h-20 resize-none py-2'}

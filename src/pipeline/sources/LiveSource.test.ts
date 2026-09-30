@@ -3,6 +3,8 @@ import type { PipelineEvent, Settings } from '../events';
 import { LiveSource } from './LiveSource';
 import { parseFrame } from './sse';
 
+const proxyConn = { mode: 'proxy' as const, proxyUrl: '/api', provider: 'anthropic' as const, apiKey: '', baseUrl: '' };
+
 const settings: Settings = {
   model: 'claude-test',
   systemPrompt: 'Be brief.',
@@ -57,7 +59,7 @@ describe('LiveSource', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const events: PipelineEvent[] = [];
-    await new LiveSource('/api').run('What was too big?', settings, (e) => events.push(e), new AbortController().signal);
+    await new LiveSource(proxyConn).run('What was too big?', settings, (e) => events.push(e), new AbortController().signal);
 
     const types = events.map((e) => e.type);
     expect(types.slice(0, 5)).toEqual(['run_start', 'request_built', 'request_sent', 'tokenized', 'embedded']);
@@ -93,7 +95,7 @@ describe('LiveSource', () => {
 
   it('surfaces proxy errors', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('No API key', { status: 503 })));
-    await expect(new LiveSource('/api').run('hi', settings, () => {}, new AbortController().signal)).rejects.toThrow(/503/);
+    await expect(new LiveSource(proxyConn).run('hi', settings, () => {}, new AbortController().signal)).rejects.toThrow(/503/);
   });
 
   it('relays stream errors from the provider', async () => {
@@ -101,6 +103,6 @@ describe('LiveSource', () => {
       'fetch',
       vi.fn(async () => new Response(sseBody(['event: error\ndata: {"message":"rate limited"}']), { status: 200 })),
     );
-    await expect(new LiveSource('/api').run('hi', settings, () => {}, new AbortController().signal)).rejects.toThrow('rate limited');
+    await expect(new LiveSource(proxyConn).run('hi', settings, () => {}, new AbortController().signal)).rejects.toThrow('rate limited');
   });
 });

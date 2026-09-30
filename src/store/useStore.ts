@@ -46,6 +46,7 @@ interface Prefs {
   prompt: string;
   tourDone: boolean;
   viewMode: ViewMode;
+  connection: Connection;
 }
 
 const PREFS_KEY = 'tokenscope:prefs:v1';
@@ -84,8 +85,39 @@ export interface HealthInfo {
 
 export type Availability = 'ready' | 'unavailable' | 'unknown';
 
-export function modeAvailability(mode: Mode, health: HealthInfo | null): { state: Availability; detail: string } {
+/** How the browser reaches models: through the Node proxy, or straight from the page. */
+export interface Connection {
+  mode: 'proxy' | 'direct';
+  provider: 'anthropic' | 'openai';
+  /** Direct mode only. Lives in this browser's localStorage, never sent anywhere but the provider. */
+  apiKey: string;
+  baseUrl: string;
+  labUrl: string;
+}
+
+/** Static builds (GitHub Pages) have no proxy, so they default to direct. */
+export const STATIC_BUILD = import.meta.env.VITE_STATIC === 'true';
+
+export const DEFAULT_CONNECTION: Connection = {
+  mode: STATIC_BUILD ? 'direct' : 'proxy',
+  provider: 'anthropic',
+  apiKey: '',
+  baseUrl: '',
+  labUrl: 'http://localhost:8788',
+};
+
+export function modeAvailability(mode: Mode, health: HealthInfo | null, conn: Connection = DEFAULT_CONNECTION): { state: Availability; detail: string } {
   if (mode === 'mock') return { state: 'ready', detail: 'Canned run — always available' };
+  if (conn.mode === 'direct') {
+    if (mode === 'live') {
+      return conn.apiKey || conn.provider === 'openai'
+        ? { state: 'ready', detail: `${conn.provider} · direct from this browser` }
+        : { state: 'unavailable', detail: 'Add your API key in Settings → Connection (stays in this browser)' };
+    }
+    return health?.lab.ok
+      ? { state: 'ready', detail: `${health.lab.model ?? 'model'} at ${conn.labUrl}` }
+      : { state: 'unavailable', detail: `Lab server not reachable at ${conn.labUrl} — run npm run lab` };
+  }
   if (!health) return { state: 'unknown', detail: 'Proxy not reachable — start it with npm run dev' };
   if (mode === 'live') {
     return health.hasKey
@@ -102,6 +134,12 @@ export interface AppState {
   view: ViewState;
   health: HealthInfo | null;
   checkHealth: () => Promise<void>;
+  connection: Connection;
+  setConnection: (patch: Partial<Connection>) => void;
+  /** Fly-through: play the whole run from the start with auto camera moves. */
+  cinematic: boolean;
+  startCinematic: () => void;
+  stopCinematic: () => void;
 
   mode: Mode;
   prompt: string;
@@ -169,10 +207,10 @@ export interface AppState {
 }
 
 /** Sources registered per mode. */
-export const SOURCE_FACTORIES: Partial<Record<Mode, (proxyUrl: string) => EventSource>> = {
+export const SOURCE_FACTORIES: Record<Mode, (proxyUrl: string, conn: Connection) => EventSource> = {
   mock: () => new MockSource(),
-  live: (proxyUrl) => new LiveSource(proxyUrl),
-  lab: (proxyUrl) => new LabSource(proxyUrl),
+  live: (proxyUrl, conn) => new LiveSource({ mode: conn.mode, proxyUrl, provider: conn.provider, apiKey: conn.apiKey, baseUrl: conn.baseUrl }),
+  lab: (proxyUrl, conn) => new LabSource({ direct: conn.mode === 'direct', proxyUrl, labUrl: conn.labUrl }),
 };
 
 let abortRef: AbortController | null = null;
@@ -219,6 +257,7 @@ export const useStore = create<AppState>()(
         prompt: s.prompt,
         tourDone: s.tourStep === null,
         viewMode: s.viewMode,
+        connection: s.connection,
       });
     };
 
@@ -227,6 +266,18 @@ export const useStore = create<AppState>()(
       view: emptyView(),
       health: null,
       checkHealth: async () => {
+        const conn = get().connection;
+        if (conn.mode === 'direct') {
+          let lab: HealthInfo['lab'] = { ok: false };
+          try {
+            const r = await fetch(`${conn.labUrl.replace(/\/$/, '')}/health`, { signal: AbortSignal.timeout(2500) });
+            if (r.ok) lab = { ok: true, ...((await r.json()) as { model?: string; nLayers?: number }) };
+          } catch {
+            /* lab server not running */
+          }
+          set({ health: { ok: true, provider: conn.provider, hasKey: Boolean(conn.apiKey), model: get().settings.model, lab } });
+          return;
+        }
         try {
           const res = await fetch(`${get().proxyUrl.replace(/\/$/, '')}/health`, { signal: AbortSignal.timeout(3000) });
           set({ health: res.ok ? ((await res.json()) as HealthInfo) : null });
@@ -234,6 +285,21 @@ export const useStore = create<AppState>()(
           set({ health: null });
         }
       },
+      connection: { ...DEFAULT_CONNECTION, ...prefs.connection },
+      setConnection: (patch) => {
+        set({ connection: { ...get().connection, ...patch } });
+        persist();
+        void get().checkHealth();
+      },
+      cinematic: false,
+      startCinematic: () => {
+        if (get().transport.eventCount === 0) return;
+        set({ viewMode: 'cinema', cinematic: true, inspectorOpen: false, focusedStage: null, historyOpen: false, settingsOpen: false });
+        scheduler.pause();
+        scheduler.seekEvent(-1);
+        scheduler.play();
+      },
+      stopCinematic: () => set({ cinematic: false }),
 
       mode: prefs.mode ?? 'mock',
       prompt: prefs.prompt ?? defaultPrompt,
@@ -292,7 +358,7 @@ export const useStore = create<AppState>()(
       },
 
       send: async () => {
-        const { prompt, mode, settings, proxyUrl } = get();
+        const { prompt, mode, settings, proxyUrl, connection } = get();
         if (!prompt.trim()) return;
         get().stop();
         const controller = new AbortController();
@@ -300,11 +366,7 @@ export const useStore = create<AppState>()(
         pending = [];
         scheduler.reset();
         set({ running: true, error: null, selectedSeq: null, focusedStage: null, historyOpen: false, attnLayer: null, samplingOverride: null });
-        const factory = SOURCE_FACTORIES[mode] ?? SOURCE_FACTORIES.mock;
-        const source = factory ? factory(proxyUrl) : new MockSource();
-        if (source.kind !== mode) {
-          set({ notice: `${MODE_LABEL[mode]} mode is not available yet — showing a Mock run instead.` });
-        }
+        const source = SOURCE_FACTORIES[mode](proxyUrl, connection);
         scheduler.play();
         let ok = false;
         try {
@@ -425,7 +487,9 @@ scheduler.subscribe((t) => {
   const prev = useStore.getState();
   const sameCursor = t.cursor === prev.view.cursor && t.eventCount >= prev.transport.eventCount;
   const view = sameCursor ? prev.view : deriveView(scheduler.events, t.cursor, prev.view);
-  useStore.setState({ transport: t, view });
+  // The fly-through ends itself when the run has been replayed to the end.
+  const cinematic = prev.cinematic && !t.ended;
+  useStore.setState({ transport: t, view, cinematic });
 });
 
 /** Convenience: the event currently shown in the inspector. */

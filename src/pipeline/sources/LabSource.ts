@@ -72,10 +72,17 @@ type Payload<T extends PipelineEvent['type']> = Omit<
   'seq' | 't' | 'baseDurationMs' | 'stage' | 'fidelity' | 'step'
 >;
 
+export interface LabConnection {
+  /** Call the Python server straight from the browser (static hosting) instead of via the proxy. */
+  direct: boolean;
+  proxyUrl: string;
+  labUrl: string;
+}
+
 export class LabSource implements EventSource {
   readonly kind: Mode = 'lab';
 
-  constructor(private readonly proxyUrl: string) {}
+  constructor(private readonly conn: LabConnection) {}
 
   async run(prompt: string, settings: Settings, emit: Emit, signal: AbortSignal): Promise<void> {
     const out = sequenced(emit);
@@ -117,8 +124,8 @@ export class LabSource implements EventSource {
       bytes: new TextEncoder().encode(JSON.stringify(body)).length,
     });
 
-    const base = this.proxyUrl.replace(/\/$/, '');
-    const res = await fetch(`${base}/lab/run`, {
+    const url = this.conn.direct ? `${this.conn.labUrl.replace(/\/$/, '')}/run` : `${this.conn.proxyUrl.replace(/\/$/, '')}/lab/run`;
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -132,7 +139,7 @@ export class LabSource implements EventSource {
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
-      throw new Error(`Lab server: ${res.status}${text ? ` — ${text.slice(0, 300)}` : ''}. Start it with \`uvicorn server:app --port 8788\` in lab-server/.`);
+      throw new Error(`Lab server: ${res.status}${text ? ` — ${text.slice(0, 300)}` : ''}. Start it with \`npm run lab\` (lab-server/).`);
     }
 
     const emitLayerPass = (

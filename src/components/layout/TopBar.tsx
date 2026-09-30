@@ -6,7 +6,7 @@ import { PRESETS } from '../../sim/presets';
 import { MODE_LABEL, modeAvailability, useStore } from '../../store/useStore';
 import { playCue, primeAudio } from '../../audio/cues';
 import { IconButton } from '../common/IconButton';
-import { ChevronDownIcon, GearIcon, PanelIcon, SendIcon, SoundIcon, SoundOffIcon, StopIcon } from '../common/Icons';
+import { ChevronDownIcon, FilmIcon, GearIcon, PanelIcon, SendIcon, SoundIcon, SoundOffIcon, StopIcon } from '../common/Icons';
 import { HistoryMenu } from './HistoryMenu';
 
 const MODES: Mode[] = ['mock', 'live', 'lab'];
@@ -29,8 +29,29 @@ function Logo() {
 
 const DOT: Record<string, string> = { ready: 'bg-ok', unavailable: 'bg-danger', unknown: 'bg-warn' };
 
+function CinematicButton() {
+  const { on, start, stop, viewMode, eventCount } = useStore(
+    useShallow((s) => ({ on: s.cinematic, start: s.startCinematic, stop: s.stopCinematic, viewMode: s.viewMode, eventCount: s.transport.eventCount })),
+  );
+  if (viewMode !== 'cinema') return null;
+  return (
+    <button
+      type="button"
+      disabled={eventCount === 0}
+      onClick={() => (on ? stop() : start())}
+      title={on ? 'Exit the fly-through (Esc)' : 'Play the whole run as a fly-through with automatic camera moves'}
+      className={
+        'inline-flex h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium disabled:opacity-40 ' +
+        (on ? 'border-phase-output/60 bg-phase-output/15 text-phase-output' : 'border-line bg-surface-2 text-text-muted hover:border-line-strong hover:text-text')
+      }
+    >
+      <FilmIcon width={15} height={15} /> {on ? 'Exit' : 'Fly-through'}
+    </button>
+  );
+}
+
 function ModeToggle() {
-  const { mode, setMode, health } = useStore(useShallow((s) => ({ mode: s.mode, setMode: s.setMode, health: s.health })));
+  const { mode, setMode, health, conn } = useStore(useShallow((s) => ({ mode: s.mode, setMode: s.setMode, health: s.health, conn: s.connection })));
   return (
     <div data-tour="mode" role="radiogroup" aria-label="Event source" className="relative flex rounded-lg border border-line bg-surface-2 p-0.5">
       {MODES.map((m) => (
@@ -39,7 +60,7 @@ function ModeToggle() {
           type="button"
           role="radio"
           aria-checked={mode === m}
-          title={modeAvailability(m, health).detail}
+          title={modeAvailability(m, health, conn).detail}
           onClick={() => setMode(m)}
           className={
             'relative z-10 rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ' +
@@ -53,7 +74,7 @@ function ModeToggle() {
               className="absolute inset-0 -z-10 rounded-md bg-surface-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
             />
           )}
-          <span className={'mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ' + (DOT[modeAvailability(m, health).state] ?? 'bg-warn')} />
+          <span className={'mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ' + (DOT[modeAvailability(m, health, conn).state] ?? 'bg-warn')} />
           {MODE_LABEL[m]}
         </button>
       ))}
@@ -231,6 +252,7 @@ export function TopBar() {
       <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-0">
         <ModeToggle />
         <ViewToggle />
+        <CinematicButton />
         <span className="hidden xl:inline-flex">
           <SpeedChip />
         </span>

@@ -110,6 +110,12 @@ export const CameraIcon = (p: P) => (
     <circle cx="12" cy="13" r="3.5" />
   </svg>
 );
+export const FilmIcon = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" />
+  </svg>
+);
 export const HistoryIcon = (p: P) => (
   <svg {...base(p)}>
     <path d="M3 12a9 9 0 1 0 3-6.7" />

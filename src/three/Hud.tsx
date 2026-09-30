@@ -10,13 +10,14 @@ import { HudControls } from './HudControls';
 
 /** DOM overlay on the 3-D stage: where we are, what just happened, key numbers. */
 export function Hud() {
-  const { stage, lastEvent, view, fidelity, level } = useStore(
+  const { stage, lastEvent, view, fidelity, level, cinematic } = useStore(
     useShallow((s) => ({
       stage: s.focusedStage ?? s.view.currentStage,
       lastEvent: s.view.lastEvent,
       view: s.view,
       fidelity: s.view.currentStage ? s.view.stageFidelity[s.view.currentStage] : null,
       level: s.explainLevel,
+      cinematic: s.cinematic,
     })),
   );
   if (!stage) return null;
@@ -24,6 +25,39 @@ export function Hud() {
   const Summary = SCENES[stage].Summary;
   const ex = lastEvent ? explainEvent(lastEvent, view) : null;
   const color = stageColor(stage);
+
+  if (cinematic) {
+    return (
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {/* letterbox */}
+        <motion.div initial={{ height: 0 }} animate={{ height: '9%' }} transition={springs.soft} className="absolute inset-x-0 top-0 bg-bg-deep" />
+        <motion.div initial={{ height: 0 }} animate={{ height: '9%' }} transition={springs.soft} className="absolute inset-x-0 bottom-0 bg-bg-deep" />
+        <div className="absolute top-3 right-4 text-[10.5px] tracking-[0.12em] text-text-faint uppercase">fly-through · esc or grab the world to take over</div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={stage}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={springs.snappy}
+            className="absolute bottom-[11%] left-1/2 w-[720px] max-w-[90%] -translate-x-1/2 text-center"
+          >
+            <div className="mono text-[11px] tracking-[0.18em] uppercase" style={{ color }}>
+              {meta.index} / 9
+            </div>
+            <div className="mt-1 text-[30px] font-semibold tracking-tight text-text drop-shadow-[0_2px_18px_rgba(0,0,0,0.8)]">{meta.title}</div>
+            <AnimatePresence mode="wait">
+              {ex && (
+                <motion.p key={lastEvent?.seq} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="mt-1.5 text-[14px] leading-relaxed text-text-muted drop-shadow-[0_1px_10px_rgba(0,0,0,0.9)]">
+                  {(level === 'math' ? ex.math : ex.simple).split(/(?<=\.)\s/)[0]}
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    );
+  }
 
   return (
     <div className="pointer-events-none absolute inset-0">

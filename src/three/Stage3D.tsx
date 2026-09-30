@@ -75,7 +75,7 @@ function Ambience({ stage }: { stage: StageId }) {
 }
 
 function World() {
-  const { stage, focused } = useStore(useShallow((s) => ({ stage: s.view.currentStage, focused: s.focusedStage })));
+  const { stage, focused, cinematic } = useStore(useShallow((s) => ({ stage: s.view.currentStage, focused: s.focusedStage, cinematic: s.cinematic })));
   const reduced = useReducedMotion() ?? false;
   const active: StageId = focused ?? stage ?? 'compose';
   const cur = stageIndex(active);
@@ -87,7 +87,7 @@ function World() {
       <directionalLight position={[20, 30, 10]} intensity={0.8} />
       <Grid position={[0, -0.05, 0]} args={[10, 10]} cellSize={2} cellThickness={0.6} sectionSize={10} sectionThickness={1.1} cellColor="#182246" sectionColor="#26305a" fadeDistance={120} fadeStrength={1.4} infiniteGrid />
       <Ambience stage={active} />
-      <CameraRig stage={active} reduced={reduced} />
+      <CameraRig stage={active} reduced={reduced} cinematic={cinematic} />
       <Courier stage={active} />
       <Suspense fallback={null}>
         {STAGE_ORDER.map((s, i) =>
@@ -108,9 +108,15 @@ function World() {
 
 /** The cinematic 3-D view: one continuous world, one set per stage. */
 export function Stage3D() {
-  const eventCount = useStore((s) => s.transport.eventCount);
+  const { eventCount, cinematic, stopCinematic } = useStore(useShallow((s) => ({ eventCount: s.transport.eventCount, cinematic: s.cinematic, stopCinematic: s.stopCinematic })));
   return (
-    <div className="relative h-full min-h-0">
+    <div
+      className="relative h-full min-h-0"
+      onPointerDownCapture={() => {
+        // Grabbing the world hands the camera back to the viewer.
+        if (cinematic) stopCinematic();
+      }}
+    >
       <Canvas
         dpr={[1, 1.75]}
         camera={{ fov: 42, near: 0.1, far: 400, position: [2, 7, 30] }}
