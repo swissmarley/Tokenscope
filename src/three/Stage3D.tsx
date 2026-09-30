@@ -6,6 +6,7 @@ import { easing } from 'maath';
 import { Suspense, useRef } from 'react';
 import { ACESFilmicToneMapping, Group } from 'three';
 import { useShallow } from 'zustand/shallow';
+import { ReplyPanel } from '../components/layout/ReplyPanel';
 import { Welcome } from '../components/layout/Welcome';
 import type { StageId } from '../pipeline/events';
 import { STAGE_ORDER, stageIndex } from '../pipeline/stages';
@@ -130,7 +131,10 @@ export function Stage3D() {
           <Welcome />
         </div>
       ) : (
-        <Hud />
+        <>
+          <Hud />
+          {!cinematic && <ReplyPanel className="absolute top-10 right-4 z-10 w-[380px]" />}
+        </>
       )}
     </div>
   );

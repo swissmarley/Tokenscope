@@ -120,7 +120,9 @@ test('transport: keyboard play/pause, stepping and the inspector', async ({ page
   await page.screenshot({ path: 'e2e/screenshots/inspector.png' });
 });
 
-test('live mode without a key fails loudly, not silently', async ({ page }) => {
+test('live mode without a key fails loudly, not silently', async ({ page, request }) => {
+  const health = await request.get('/api/health').then((r) => r.json() as Promise<{ hasKey?: boolean }>).catch(() => ({}));
+  test.skip(Boolean(health.hasKey), 'a real API key is configured on the proxy; skipping the no-key error path');
   await waitForRun(page, 'detail');
   await page.getByRole('radio', { name: 'Live API' }).click();
   await page.getByRole('button', { name: 'Send', exact: true }).click();

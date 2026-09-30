@@ -105,7 +105,16 @@ export function StreamSet() {
         <Label position={[-6, 3.05, 0.25]} fontSize={0.24} color={C.output} anchorX="left">
           ASSISTANT
         </Label>
-        <Label position={[-6, 0.6, 0.25]} fontSize={0.36} color={C.text} anchorX="left" anchorY="top" maxWidth={12} textAlign="left" lineHeight={1.4}>
+        <Label
+          position={[-6, 2.6, 0.25]}
+          fontSize={Math.max(0.17, Math.min(0.36, 0.36 * Math.sqrt(420 / Math.max(420, stream.text.length))))}
+          color={C.text}
+          anchorX="left"
+          anchorY="top"
+          maxWidth={12}
+          textAlign="left"
+          lineHeight={1.4}
+        >
           {stream.text || '…'}
         </Label>
         <mesh ref={cursor} position={[5.8, -3, 0.25]}>

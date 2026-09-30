@@ -3,6 +3,7 @@ import { LayoutGroup, useReducedMotion } from 'framer-motion';
 import { useShallow } from 'zustand/shallow';
 import { STAGES, stageIndex } from '../../pipeline/stages';
 import { useStore } from '../../store/useStore';
+import { ReplyPanel } from '../layout/ReplyPanel';
 import { Welcome } from '../layout/Welcome';
 import { StageFrame, type StageStatus } from './StageFrame';
 import { SCENES } from './scenes';
@@ -66,6 +67,7 @@ export function Journey() {
       )}
       <LayoutGroup>
       <div className={'mx-auto flex max-w-[1180px] flex-col gap-4 px-4 py-6 pb-[40vh] lg:px-8 ' + (eventCount === 0 ? 'opacity-40' : '')}>
+        {eventCount > 0 && <ReplyPanel />}
         {STAGES.map((s, i) => {
           const status: StageStatus =
             s.id === currentStage ? 'active' : reached[s.id] && i < currentIdx ? 'done' : reached[s.id] ? 'done' : 'upcoming';
