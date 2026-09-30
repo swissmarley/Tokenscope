@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:web"],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:server"],
+      "port": 8787
+    },
+    {
+      "name": "lab",
+      "runtimeExecutable": "lab-server/.venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "server:app", "--app-dir", "lab-server", "--port", "8788"],
+      "port": 8788
+    }
+  ]
+}

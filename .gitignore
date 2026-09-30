@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+server/.env
+lab-server/.venv
+lab-server/__pycache__
+test-results
+playwright-report
+e2e/screenshots
+.DS_Store
