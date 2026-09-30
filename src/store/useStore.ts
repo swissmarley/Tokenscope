@@ -22,7 +22,7 @@ export type ViewMode = 'cinema' | 'detail';
 export const DEFAULT_SETTINGS: Settings = {
   model: 'claude-sonnet-5-5',
   systemPrompt: 'You are a concise, friendly assistant.',
-  maxTokens: 256,
+  maxTokens: 1024,
   temperature: 0.7,
   topK: 40,
   topP: 0.95,
@@ -303,7 +303,8 @@ export const useStore = create<AppState>()(
 
       mode: prefs.mode ?? 'mock',
       prompt: prefs.prompt ?? defaultPrompt,
-      settings: { ...DEFAULT_SETTINGS, ...prefs.settings },
+      // Saved prefs win, except the old 256 default, which follows the new default.
+      settings: { ...DEFAULT_SETTINGS, ...prefs.settings, ...(prefs.settings?.maxTokens === 256 ? { maxTokens: 1024 } : {}) },
       proxyUrl: prefs.proxyUrl ?? '/api',
       running: false,
       error: null,

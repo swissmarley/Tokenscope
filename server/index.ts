@@ -45,7 +45,7 @@ function validate(body: unknown): ChatRequest | null {
   if (messages.length === 0) return null;
   const req: ChatRequest = {
     model: typeof b.model === 'string' ? b.model.slice(0, 100) : '',
-    max_tokens: Math.min(4096, Math.max(1, Number(b.max_tokens) || 256)),
+    max_tokens: Math.min(4096, Math.max(1, Number(b.max_tokens) || 1024)),
     temperature: Math.min(2, Math.max(0, Number(b.temperature) || 0)),
     messages,
   };
