@@ -7,7 +7,7 @@ export default defineConfig({
   timeout: 90_000,
   reporter: 'list',
   use: {
-    baseURL: `http://localhost:${port}`,
+    baseURL: `http://127.0.0.1:${port}`,
     viewport: { width: 1440, height: 900 },
     colorScheme: 'dark',
   },

@@ -6,6 +6,7 @@ import { springs } from '../../../design/motion';
 import { useCurrentProgress } from '../../../hooks/useCurrentProgress';
 import { easeOut, window01 } from '../../../hooks/useEventProgress';
 import type { EventOf } from '../../../pipeline/events';
+import { wireFrame, wireLabel } from '../../../pipeline/wireFrame';
 import { useStore } from '../../../store/useStore';
 import { Odometer } from '../../common/Odometer';
 import { displayText } from '../../common/TokenChip';
@@ -71,29 +72,6 @@ function Wire({ chunks, done, nowT }: { chunks: EventOf<'token_streamed'>[]; don
   );
 }
 
-/**
- * The SSE frame to show for a chunk: the one that actually arrived when the source kept it
- * (Anthropic, OpenAI-compatible or lab server), else an Anthropic-style example for canned runs.
- */
-function wireFrame(c: EventOf<'token_streamed'>): Array<[string, string]> {
-  const raw =
-    c.raw ??
-    `event: content_block_delta\ndata: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: c.text } })}`;
-  return raw
-    .split('\n')
-    .filter((line) => line.trim() !== '')
-    .map((line) => {
-      const colon = line.indexOf(':');
-      return colon > 0 ? [line.slice(0, colon), line.slice(colon + 1).trimStart()] : ['', line];
-    });
-}
-
-const WIRE_LABEL: Record<EventOf<'token_streamed'>['wire'], string> = {
-  sse: 'provider frame, as received',
-  lab: 'lab server frame, as received',
-  canned: 'example frame (canned run)',
-};
-
 // ─── Scene ──────────────────────────────────────────────────────────────────
 
 function Summary() {
@@ -132,7 +110,7 @@ function Body() {
         <div className="mb-1 flex items-baseline justify-between">
           <span className="text-[11px] font-semibold tracking-[0.1em] text-text-muted uppercase">Over the wire · server-sent events</span>
           <span className="mono text-[10.5px] text-text-faint">
-            {stream.chunks.length} chunks · real time{lastChunk && ` · ${lastChunk.raw ? WIRE_LABEL[lastChunk.wire] : WIRE_LABEL.canned}`}
+            {stream.chunks.length} chunks · real time{lastChunk && ` · ${wireLabel(lastChunk)}`}
           </span>
         </div>
         <Wire chunks={stream.chunks} done={done} nowT={nowT} />

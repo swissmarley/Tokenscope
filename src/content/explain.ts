@@ -1,5 +1,6 @@
 import type { PipelineEvent } from '../pipeline/events';
 import type { ViewState } from '../pipeline/derive';
+import { wireFrame, wireLabel } from '../pipeline/wireFrame';
 
 /**
  * Plain-language and math-flavoured copy for every event type. Numbers come
@@ -142,7 +143,9 @@ export function explainEvent(e: PipelineEvent, view: ViewState): Explanation {
       return {
         title: `Chunk ${e.chunkIndex + 1} on the wire`,
         simple: `Token ${e.token.id} is turned back into text, ${q(e.text)}, and pushed to your browser as a server-sent event before the next token is even computed.`,
-        math: `event: content_block_delta · data: {"delta":{"text":${JSON.stringify(e.text)}}} · arrived at t = ${fmt(e.t)} ms.`,
+        math: `${wireLabel(e)}: ${wireFrame(e)
+          .map(([field, value]) => (field ? `${field}: ${value}` : value))
+          .join(' · ')} · arrived at t = ${fmt(e.t)} ms.`,
         deeper:
           'Streaming does not make generation faster; it hides latency by letting you read while the model is still working. Chunks are usually one token but providers may coalesce several.',
       };

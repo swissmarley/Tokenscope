@@ -82,7 +82,7 @@ export interface HealthInfo {
   provider: string;
   hasKey: boolean;
   model: string | null;
-  lab: { ok: boolean; model?: string; nLayers?: number };
+  lab: { ok: boolean; model?: string; nLayers?: number; maxOutputTokens?: number };
 }
 
 export type Availability = 'ready' | 'unavailable' | 'unknown';
@@ -235,10 +235,19 @@ export const SOURCE_FACTORIES: Record<Mode, (proxyUrl: string, conn: Connection,
       defaultModel: defaultLiveModel(health, conn),
     }),
   lab: (proxyUrl, conn, health) =>
-    new LabSource({ direct: conn.mode === 'direct', proxyUrl, labUrl: conn.labUrl, ...(health?.lab.model ? { model: health.lab.model } : {}) }),
+    new LabSource({
+      direct: conn.mode === 'direct',
+      proxyUrl,
+      labUrl: conn.labUrl,
+      ...(health?.lab.model ? { model: health.lab.model } : {}),
+      ...(health?.lab.maxOutputTokens ? { maxOutputTokens: health.lab.maxOutputTokens } : {}),
+    }),
 };
 
 let abortRef: AbortController | null = null;
+/** When `health` was last fetched; Lab sends reuse a result younger than HEALTH_FRESH_MS. */
+let healthCheckedAt = 0;
+const HEALTH_FRESH_MS = 5000;
 let pending: PipelineEvent[] = [];
 let flushQueued = false;
 
@@ -296,11 +305,12 @@ export const useStore = create<AppState>()(
           let lab: HealthInfo['lab'] = { ok: false };
           try {
             const r = await fetch(`${conn.labUrl.replace(/\/$/, '')}/health`, { signal: AbortSignal.timeout(2500) });
-            if (r.ok) lab = { ok: true, ...((await r.json()) as { model?: string; nLayers?: number }) };
+            if (r.ok) lab = { ok: true, ...((await r.json()) as Omit<HealthInfo['lab'], 'ok'>) };
           } catch {
             /* lab server not running */
           }
           set({ health: { ok: true, provider: conn.provider, hasKey: Boolean(conn.apiKey), model: get().settings.model, lab } });
+          healthCheckedAt = Date.now();
           return;
         }
         try {
@@ -309,6 +319,7 @@ export const useStore = create<AppState>()(
         } catch {
           set({ health: null });
         }
+        healthCheckedAt = Date.now();
       },
       connection: { ...DEFAULT_CONNECTION, ...prefs.connection },
       setConnection: (patch) => {
@@ -391,8 +402,9 @@ export const useStore = create<AppState>()(
       send: async () => {
         const { prompt, mode, settings, proxyUrl, connection } = get();
         if (!prompt.trim()) return;
-        // The lab server may have been restarted with another model since the last check.
-        if (mode === 'lab') await get().checkHealth();
+        // The lab server may have been restarted with another model or limits; recheck unless the
+        // last check is fresh and found it up (a slow lab server makes each check cost up to ~0.8 s).
+        if (mode === 'lab' && (!get().health?.lab.ok || Date.now() - healthCheckedAt > HEALTH_FRESH_MS)) await get().checkHealth();
         get().stop();
         const controller = new AbortController();
         abortRef = controller;

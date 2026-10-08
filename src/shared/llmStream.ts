@@ -67,7 +67,7 @@ export function keyOptional(baseUrl: string | undefined): boolean {
   );
 }
 
-const STOP_MAP:Record<string, string> = { stop: 'end_turn', length: 'max_tokens', content_filter: 'content_filter' };
+const STOP_MAP: Record<string, string> = { stop: 'end_turn', length: 'max_tokens', content_filter: 'content_filter' };
 
 export async function streamChat(cfg: StreamConfig, req: ChatRequest, send: Send, signal: AbortSignal): Promise<void> {
   if (cfg.provider === 'anthropic') return streamAnthropic(cfg, req, send, signal);

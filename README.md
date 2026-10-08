@@ -12,10 +12,10 @@ stepping and scrubbing are always exact.
 
 ```bash
 npm ci               # installs exactly what package-lock.json pins
-npm run dev          # Vite on :5173 + the API proxy on 127.0.0.1:8787
+npm run dev          # Vite on 127.0.0.1:5173 + the API proxy on 127.0.0.1:8787
 ```
 
-Open http://localhost:5173. The app starts in **Mock** mode with a canned run — no key, no download.
+Open http://127.0.0.1:5173 (both servers listen on IPv4 loopback only). The app starts in **Mock** mode with a canned run — no key, no download.
 
 | Script | What it does |
 |---|---|

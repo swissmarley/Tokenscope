@@ -72,6 +72,24 @@ describe('LabSource', () => {
     expect(done.tokensPerSec).toBeCloseTo(1000 / (done.totalMs - done.ttftMs), 5);
   });
 
+  it("caps max_tokens at the lab server's reported limit, or 128 when it reports none", async () => {
+    const sent: number[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        sent.push((JSON.parse(String(init?.body)) as { max_tokens: number }).max_tokens);
+        return new Response(sseBody(labFrames('done')), { status: 200 });
+      }),
+    );
+    const big = { ...settings, maxTokens: 1024 };
+    const run = (c: typeof conn & { maxOutputTokens?: number }, s: Settings) => new LabSource(c).run('Hi there', s, () => {}, new AbortController().signal);
+    await run({ ...conn, maxOutputTokens: 32 }, big); // LAB_MAX_OUTPUT_TOKENS=32 → no 422
+    await run({ ...conn, maxOutputTokens: 512 }, big); // a raised limit takes effect
+    await run({ ...conn, maxOutputTokens: 512 }, settings); // the user's own lower setting still wins
+    await run(conn, big); // older server without the field
+    expect(sent).toEqual([32, 512, 64, 128]);
+  });
+
   it('relays an error event from the lab server', async () => {
     await expect(runWith(sseBody(labFrames('error')))).rejects.toThrow('IndexError');
   });

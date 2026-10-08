@@ -79,7 +79,12 @@ export interface LabConnection {
   labUrl: string;
   /** Model the lab server reported in its last health check, if any. */
   model?: string;
+  /** The lab server's LAB_MAX_OUTPUT_TOKENS, from the same health check. */
+  maxOutputTokens?: number;
 }
+
+/** Output cap when the lab server does not report one (older servers); matches its default. */
+export const LAB_DEFAULT_MAX_OUTPUT = 128;
 
 /** The server sends only the causal lower triangle (row q has q + 1 weights); pad back to square. */
 function padCausal(head: number[][], seqLen: number): number[][] {
@@ -119,8 +124,8 @@ export class LabSource implements EventSource {
     };
 
     const runId = `lab-${Date.now().toString(36)}`;
-    // Small local models ramble; keep lab runs watchable.
-    const maxTokens = Math.min(settings.maxTokens, 128);
+    // Small local models ramble; the lab server caps output (LAB_MAX_OUTPUT_TOKENS) to keep runs watchable.
+    const maxTokens = Math.min(settings.maxTokens, this.conn.maxOutputTokens ?? LAB_DEFAULT_MAX_OUTPUT);
     settings = { ...settings, model: `local lab model (${this.conn.model ?? 'unknown'})`, maxTokens };
     const body = buildRequestBody(prompt, settings);
     let meta: Meta | null = null;

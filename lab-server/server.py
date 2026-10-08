@@ -22,7 +22,8 @@ import time
 from typing import Any, Iterator
 
 import torch
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -88,7 +89,8 @@ print(f"[lab] ready: {MODEL} · {N_LAYERS} layers · {N_HEADS} heads · d={D_MOD
 
 class RunRequest(BaseModel):
     prompt: str = Field(max_length=MAX_PROMPT_CHARS)
-    max_tokens: int = Field(48, ge=1, le=MAX_OUTPUT_TOKENS)
+    # Clamped to LAB_MAX_OUTPUT_TOKENS rather than rejected, so a client unaware of the limit still runs.
+    max_tokens: int = Field(48, ge=1)
     temperature: float = Field(0.8, ge=0.0, le=2.0)
     top_k: int = Field(40, ge=0, le=VOCAB)
     top_p: float = Field(0.95, ge=0.0, le=1.0)
@@ -174,19 +176,32 @@ def bad_request(message: str) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=400)
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_error(_req: Request, exc: RequestValidationError) -> JSONResponse:
+    # FastAPI echoes each rejected value back; for the prompt that is up to MAX_PROMPT_CHARS of user text.
+    errors = [{k: v for k, v in err.items() if k != "input"} for err in exc.errors()]
+    return JSONResponse({"detail": errors}, status_code=422)
+
+
 @app.post("/run", response_model=None)
 def run(req: RunRequest) -> StreamingResponse | JSONResponse:
     ids = tokenizer.encode(req.prompt) or [EOS]
-    limit = min(MAX_PROMPT_TOKENS, CONTEXT - 1)
-    if len(ids) > limit:
-        why = f"{MODEL}'s context window is {CONTEXT}" if limit == CONTEXT - 1 else "set LAB_MAX_PROMPT_TOKENS to raise it"
-        return bad_request(f"Prompt is {len(ids)} tokens; the lab server accepts at most {limit} ({why}).")
+    n = len(ids)
+    # Check the model's own window first: raising LAB_MAX_PROMPT_TOKENS cannot help past it.
+    if n > CONTEXT - 1:
+        return bad_request(f"Prompt is {n} tokens, over {MODEL}'s context window of {CONTEXT} (at least one reply token must fit).")
+    if n > MAX_PROMPT_TOKENS:
+        return bad_request(
+            f"Prompt is {n} tokens; the lab server accepts at most {MAX_PROMPT_TOKENS} "
+            f"(set LAB_MAX_PROMPT_TOKENS to raise it, up to {CONTEXT - 1} for {MODEL})."
+        )
+    wanted = min(req.max_tokens, MAX_OUTPUT_TOKENS)
     # Prompt plus reply must fit the window the model was trained on.
-    max_tokens = min(req.max_tokens, CONTEXT - len(ids))
+    max_tokens = min(wanted, CONTEXT - n)
 
     def gen() -> Iterator[str]:
         try:
-            yield from generate(req, ids, max_tokens)
+            yield from generate(req, ids, max_tokens, context_limited=max_tokens < wanted)
         except Exception as err:  # noqa: BLE001 — anything mid-stream must reach the client as an event
             print(f"[lab] run failed: {err!r}", flush=True)
             yield sse("error", {"message": f"Lab server: {type(err).__name__}: {err}"})
@@ -197,7 +212,7 @@ def run(req: RunRequest) -> StreamingResponse | JSONResponse:
 # Grad mode is per thread and Starlette resumes this generator on worker threads, so the
 # module-level set_grad_enabled(False) does not reach it; the decorator re-applies it on every resume.
 @torch.inference_mode()
-def generate(req: RunRequest, ids: list[int], max_tokens: int) -> Iterator[str]:
+def generate(req: RunRequest, ids: list[int], max_tokens: int, context_limited: bool) -> Iterator[str]:
     t0 = time.perf_counter()
 
     def now() -> int:
@@ -312,7 +327,7 @@ def generate(req: RunRequest, ids: list[int], max_tokens: int) -> Iterator[str]:
         text_so_far = full
         yield sse("chunk", {"text": piece, "tokenId": chosen, "t": now()})
         if step == max_tokens - 1:
-            if max_tokens < req.max_tokens:
+            if context_limited:
                 stop = "context_window"
             break
 
