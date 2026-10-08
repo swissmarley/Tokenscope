@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import { useShallow } from 'zustand/shallow';
 import { springs, tween } from '../../design/motion';
-import { useStore } from '../../store/useStore';
+import { defaultLiveModel, useStore } from '../../store/useStore';
 import { IconButton } from '../common/IconButton';
 import { CloseIcon } from '../common/Icons';
 
@@ -106,8 +106,9 @@ function ConnectionSection() {
 }
 
 export function SettingsModal() {
-  const { open, setOpen, settings, setSettings, cameraFollow, setCameraFollow, soundOn, setSoundOn } = useStore(
+  const { open, setOpen, settings, setSettings, cameraFollow, setCameraFollow, soundOn, setSoundOn, fallbackModel } = useStore(
     useShallow((s) => ({
+      fallbackModel: defaultLiveModel(s.health, s.connection),
       open: s.settingsOpen,
       setOpen: s.setSettingsOpen,
       settings: s.settings,
@@ -148,8 +149,13 @@ export function SettingsModal() {
             </div>
             <div className="grid max-h-[75vh] gap-4 overflow-y-auto px-5 py-4">
               <ConnectionSection />
-              <Field label="Model" hint="sent as model">
-                <input className={inputCls} value={settings.model} onChange={(e) => setSettings({ model: e.target.value })} />
+              <Field label="Model" hint="Live mode; leave empty for the default">
+                <input
+                  className={inputCls}
+                  value={settings.model}
+                  onChange={(e) => setSettings({ model: e.target.value })}
+                  placeholder={fallbackModel ? `default: ${fallbackModel}` : 'e.g. llama3.2:1b'}
+                />
               </Field>
               <Field label="System prompt">
                 <textarea

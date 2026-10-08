@@ -6,6 +6,7 @@ import { springs } from '../../../design/motion';
 import { useCurrentProgress } from '../../../hooks/useCurrentProgress';
 import { easeOut, window01 } from '../../../hooks/useEventProgress';
 import type { EventOf } from '../../../pipeline/events';
+import { wireFrame, wireLabel } from '../../../pipeline/wireFrame';
 import { useStore } from '../../../store/useStore';
 import { Odometer } from '../../common/Odometer';
 import { displayText } from '../../common/TokenChip';
@@ -108,7 +109,9 @@ function Body() {
       <div className="rounded-xl border border-line bg-bg-deep/60 p-3">
         <div className="mb-1 flex items-baseline justify-between">
           <span className="text-[11px] font-semibold tracking-[0.1em] text-text-muted uppercase">Over the wire · server-sent events</span>
-          <span className="mono text-[10.5px] text-text-faint">{stream.chunks.length} chunks · real time</span>
+          <span className="mono text-[10.5px] text-text-faint">
+            {stream.chunks.length} chunks · real time{lastChunk && ` · ${wireLabel(lastChunk)}`}
+          </span>
         </div>
         <Wire chunks={stream.chunks} done={done} nowT={nowT} />
         <AnimatePresence mode="wait">
@@ -121,8 +124,12 @@ function Body() {
               transition={springs.quick}
               className="mono mt-1 overflow-x-auto rounded-md bg-surface-2/70 px-2.5 py-1.5 text-[11px] text-text-muted"
             >
-              <span className="text-phase-output">event:</span> content_block_delta{'\n'}
-              <span className="text-phase-output">data:</span> {`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":${JSON.stringify(lastChunk.text)}}}`}
+              {wireFrame(lastChunk).map(([field, value], i) => (
+                <span key={i}>
+                  {i > 0 && '\n'}
+                  {field && <span className="text-phase-output">{field}:</span>} {value}
+                </span>
+              ))}
             </motion.pre>
           )}
         </AnimatePresence>

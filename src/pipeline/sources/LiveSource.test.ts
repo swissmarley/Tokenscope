@@ -93,6 +93,28 @@ describe('LiveSource', () => {
     expect(done?.type === 'done' && done.stopReason).toBe('end_turn');
   });
 
+  it('sends the configured default model when Settings leaves it empty', async () => {
+    const sent: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        sent.push((JSON.parse(String(init?.body)) as { model: string }).model);
+        return new Response(sseBody(['event: done\ndata: {"stopReason":"end_turn","usage":{"input":1,"output":0}}']), { status: 200 });
+      }),
+    );
+    const blank = { ...settings, model: '' };
+    await new LiveSource({ ...proxyConn, defaultModel: 'llama3.2:1b' }).run('hi', blank, () => {}, new AbortController().signal);
+    await new LiveSource({ ...proxyConn, defaultModel: 'llama3.2:1b' }).run('hi', settings, () => {}, new AbortController().signal);
+    // No known default through the proxy: send '' and let the proxy use OPENAI_MODEL / ANTHROPIC_MODEL.
+    await new LiveSource(proxyConn).run('hi', blank, () => {}, new AbortController().signal);
+    expect(sent).toEqual(['llama3.2:1b', 'claude-test', '']);
+  });
+
+  it('asks for a model when a direct local server has no default', async () => {
+    const conn = { mode: 'direct' as const, proxyUrl: '', provider: 'openai' as const, apiKey: '', baseUrl: 'http://localhost:11434/v1', defaultModel: '' };
+    await expect(new LiveSource(conn).run('hi', { ...settings, model: '' }, () => {}, new AbortController().signal)).rejects.toThrow(/No model set/);
+  });
+
   it('surfaces proxy errors', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('No API key', { status: 503 })));
     await expect(new LiveSource(proxyConn).run('hi', settings, () => {}, new AbortController().signal)).rejects.toThrow(/503/);

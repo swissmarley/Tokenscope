@@ -36,6 +36,37 @@ export const DEFAULT_BASE: Record<StreamConfig['provider'], string> = {
   openai: 'https://api.openai.com/v1',
 };
 
+/** Model used when the request leaves it empty and nothing else is configured. */
+export const DEFAULT_MODEL: Record<StreamConfig['provider'], string> = {
+  anthropic: 'claude-sonnet-5-5',
+  openai: 'gpt-4o-mini',
+};
+
+/**
+ * Whether an OpenAI-compatible endpoint can be called without a key: only a server on
+ * this machine or a private network (Ollama, vLLM, LM Studio). Hosted APIs answer 401.
+ */
+export function keyOptional(baseUrl: string | undefined): boolean {
+  if (!baseUrl) return false;
+  let host: string;
+  try {
+    host = new URL(baseUrl).hostname.replace(/^\[|\]$/g, '');
+  } catch {
+    return false;
+  }
+  return (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host === 'host.docker.internal' ||
+    host === '::1' ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  );
+}
+
 const STOP_MAP: Record<string, string> = { stop: 'end_turn', length: 'max_tokens', content_filter: 'content_filter' };
 
 export async function streamChat(cfg: StreamConfig, req: ChatRequest, send: Send, signal: AbortSignal): Promise<void> {
