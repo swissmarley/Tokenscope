@@ -11,8 +11,8 @@ stepping and scrubbing are always exact.
 ## Quick start
 
 ```bash
-npm install
-npm run dev          # Vite on :5173 + the API proxy on :8787
+npm ci               # installs exactly what package-lock.json pins
+npm run dev          # Vite on :5173 + the API proxy on 127.0.0.1:8787
 ```
 
 Open http://localhost:5173. The app starts in **Mock** mode with a canned run — no key, no download.
@@ -42,20 +42,49 @@ npm run dev
 
 The key lives only in `server/.env` and is read only by the Node proxy (`server/`). The browser talks to `/api/chat`;
 the proxy adds the secret header, calls the provider with `stream: true`, and forwards a normalised SSE stream
-(`meta` / `delta` / `done` / `error`). Set `LLM_PROVIDER=openai` plus `OPENAI_BASE_URL` to use OpenAI, Ollama, vLLM, etc.
+(`meta` / `delta` / `done` / `error`). The proxy listens on `127.0.0.1` only; set `PROXY_HOST=0.0.0.0` if you really
+want it on your network, keeping in mind that anyone who can reach it can spend your key.
+
+**Model.** Leave *Settings → Model* empty to use the proxy's `ANTHROPIC_MODEL` / `OPENAI_MODEL`; type a name to override it.
+
+#### Ollama (or vLLM, LM Studio, …)
+
+No key is needed when the OpenAI-compatible server runs on this machine or your private network:
+
+```bash
+ollama pull llama3.2:1b
+cat > server/.env <<'ENV'
+LLM_PROVIDER=openai
+OPENAI_BASE_URL=http://localhost:11434/v1
+OPENAI_MODEL=llama3.2:1b
+ENV
+npm run dev
+```
+
+A hosted endpoint (OpenAI itself, Groq, …) needs `OPENAI_API_KEY`; without one, Live mode shows as unavailable.
 
 ### Lab model setup (Python)
 
 ```bash
 cd lab-server
 uv venv --python 3.11 .venv          # or: python3.11 -m venv .venv
+# No NVIDIA GPU? Install the CPU-only PyTorch build first; the default one pulls several GB of CUDA libraries.
+uv pip install --python .venv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
 uv pip install --python .venv/bin/python -r requirements.txt   # torch, transformers, fastapi, uvicorn
-LAB_MODEL=distilgpt2 .venv/bin/python -m uvicorn server:app --port 8788
+LAB_MODEL=distilgpt2 .venv/bin/python -m uvicorn server:app --port 8788   # or, from the repo root: npm run lab
 ```
+
+(With plain pip: `.venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu`, then
+`.venv/bin/pip install -r requirements.txt`.)
 
 First start downloads the weights (~350 MB for distilgpt2). `LAB_MODEL=gpt2` or `LAB_MODEL=EleutherAI/pythia-70m`
 also work (pythia uses rotary positions, so its position vectors are shown as an illustration). The proxy forwards
 `/api/lab/run` to it; `GET /api/health` tells you whether it is reachable.
+
+Limits: prompts up to `LAB_MAX_PROMPT_TOKENS` (default 128) and replies up to `LAB_MAX_OUTPUT_TOKENS` (default 128),
+and prompt plus reply never exceed the model's context window (1,024 for GPT-2) — a reply cut short there ends with
+stop reason `context_window`. The prompt cap exists because prefill attention is layers × heads × n² numbers: about
+5 MB of JSON at 128 tokens for distilgpt2, and four times that at 256.
 
 ## What is real vs. illustrative in each mode
 
@@ -73,7 +102,7 @@ amber badge**; real data gets a green badge. Nothing simulated is ever presented
 | 6 KV cache (positions, prefill vs decode) | simulated | simulated | **real** (`use_cache=True`, counters derived) |
 | 7 Logits / probabilities / sampling draw | simulated (true next token guaranteed) | simulated around the real chunk text | **real** top-16 logits, real filtered draw |
 | 8 Autoregressive loop (steps, stop condition) | simulated; EOS step illustrative | steps = real chunks (GPT-2 BPE split); EOS illustrative when `end_turn` | **real** |
-| 9 Streaming chunks, detokenized text, usage, stop reason | canned | **real** SSE frames (raw line shown) | **real** |
+| 9 Streaming chunks, detokenized text, usage, stop reason | canned (example Anthropic frame shown) | **real** SSE frames (the provider's raw frame shown) | **real** (the lab server's raw frame shown) |
 
 Slow-motion *timing* is always a presentation choice (`baseDurationMs` per event); the `t` field on every event is the
 wall-clock time the source observed.
@@ -122,7 +151,7 @@ Python server running on the visitor's own machine.
 - **Inspector** (`I`): plain-language "What's happening", "Go deeper", raw event JSON; click any event, chip or bar to pin it.
 - **Keyboard**: `Space` play/pause · `←` `→` step event · `Shift+←/→` step stage · `[` `]` speed · `I` inspector · `Esc` close.
 - **History**: every run (mock, live, lab) is logged to IndexedDB and can be replayed and scrubbed without another API call.
-- **Settings**: model name, proxy URL, system prompt, `max_tokens`, temperature, top-k, top-p, camera follow, sound.
+- **Settings**: model name (empty = the configured default), proxy URL, system prompt, `max_tokens`, temperature, top-k, top-p, camera follow, sound.
 - Honors `prefers-reduced-motion` (instant steps, no smooth camera).
 
 ## Architecture

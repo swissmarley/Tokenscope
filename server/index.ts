@@ -12,6 +12,8 @@ dotenv.config({ path: fileURLToPath(new URL('./.env', import.meta.url)) });
 dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
 const PORT = Number(process.env.PORT ?? 8787);
+// Loopback only by default: the proxy spends your API key for anyone who can reach it.
+const HOST = process.env.PROXY_HOST || '127.0.0.1';
 const PROVIDERS: Record<string, Provider> = { anthropic, openai };
 const provider: Provider = PROVIDERS[process.env.LLM_PROVIDER ?? 'anthropic'] ?? anthropic;
 const LAB_URL = (process.env.LAB_SERVER_URL ?? 'http://localhost:8788').replace(/\/$/, '');
@@ -92,7 +94,15 @@ app.post('/api/lab/run', async (req, res) => {
       signal: controller.signal,
     });
     if (!upstream.ok || !upstream.body) {
-      res.status(upstream.status).json({ error: `Lab server responded ${upstream.status}` });
+      // Pass the lab server's reason through (prompt too long, invalid setting, …).
+      const raw = await upstream.text().catch(() => '');
+      let body: unknown = { error: `Lab server responded ${upstream.status}` };
+      try {
+        body = JSON.parse(raw);
+      } catch {
+        /* not JSON */
+      }
+      res.status(upstream.status).json(body);
       return;
     }
     res.status(200);
@@ -112,6 +122,6 @@ app.post('/api/lab/run', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`[api] proxy on http://localhost:${PORT} · provider=${provider.name} · key=${provider.hasKey() ? 'set' : 'missing'} · lab=${LAB_URL}`);
+app.listen(PORT, HOST, () => {
+  console.log(`[api] proxy on http://${HOST}:${PORT} · provider=${provider.name} · key=${provider.hasKey() ? 'set' : 'missing'} · lab=${LAB_URL}`);
 });

@@ -20,6 +20,8 @@ export interface LiveConnection {
   provider: 'anthropic' | 'openai';
   apiKey: string;
   baseUrl: string;
+  /** Model to send when Settings leaves it empty: the proxy's configured one, or the provider default. */
+  defaultModel?: string;
 }
 
 interface MetaData {
@@ -45,6 +47,12 @@ export class LiveSource implements EventSource {
   constructor(private readonly conn: LiveConnection) {}
 
   async run(prompt: string, settings: Settings, emit: Emit, signal: AbortSignal): Promise<void> {
+    // Empty means "the endpoint's default"; through the proxy an unknown default is filled in server-side.
+    const model = settings.model.trim() || this.conn.defaultModel || '';
+    if (!model && this.conn.mode === 'direct') {
+      throw new Error('No model set: open Settings → Model and enter one your server serves (for Ollama, e.g. llama3.2:1b).');
+    }
+    settings = { ...settings, model };
     const t0 = performance.now();
     const now = (): number => Math.round(performance.now() - t0);
     const b = new RunBuilder({

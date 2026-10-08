@@ -71,6 +71,29 @@ function Wire({ chunks, done, nowT }: { chunks: EventOf<'token_streamed'>[]; don
   );
 }
 
+/**
+ * The SSE frame to show for a chunk: the one that actually arrived when the source kept it
+ * (Anthropic, OpenAI-compatible or lab server), else an Anthropic-style example for canned runs.
+ */
+function wireFrame(c: EventOf<'token_streamed'>): Array<[string, string]> {
+  const raw =
+    c.raw ??
+    `event: content_block_delta\ndata: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: c.text } })}`;
+  return raw
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => {
+      const colon = line.indexOf(':');
+      return colon > 0 ? [line.slice(0, colon), line.slice(colon + 1).trimStart()] : ['', line];
+    });
+}
+
+const WIRE_LABEL: Record<EventOf<'token_streamed'>['wire'], string> = {
+  sse: 'provider frame, as received',
+  lab: 'lab server frame, as received',
+  canned: 'example frame (canned run)',
+};
+
 // ─── Scene ──────────────────────────────────────────────────────────────────
 
 function Summary() {
@@ -108,7 +131,9 @@ function Body() {
       <div className="rounded-xl border border-line bg-bg-deep/60 p-3">
         <div className="mb-1 flex items-baseline justify-between">
           <span className="text-[11px] font-semibold tracking-[0.1em] text-text-muted uppercase">Over the wire · server-sent events</span>
-          <span className="mono text-[10.5px] text-text-faint">{stream.chunks.length} chunks · real time</span>
+          <span className="mono text-[10.5px] text-text-faint">
+            {stream.chunks.length} chunks · real time{lastChunk && ` · ${lastChunk.raw ? WIRE_LABEL[lastChunk.wire] : WIRE_LABEL.canned}`}
+          </span>
         </div>
         <Wire chunks={stream.chunks} done={done} nowT={nowT} />
         <AnimatePresence mode="wait">
@@ -121,8 +146,12 @@ function Body() {
               transition={springs.quick}
               className="mono mt-1 overflow-x-auto rounded-md bg-surface-2/70 px-2.5 py-1.5 text-[11px] text-text-muted"
             >
-              <span className="text-phase-output">event:</span> content_block_delta{'\n'}
-              <span className="text-phase-output">data:</span> {`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":${JSON.stringify(lastChunk.text)}}}`}
+              {wireFrame(lastChunk).map(([field, value], i) => (
+                <span key={i}>
+                  {i > 0 && '\n'}
+                  {field && <span className="text-phase-output">{field}:</span>} {value}
+                </span>
+              ))}
             </motion.pre>
           )}
         </AnimatePresence>

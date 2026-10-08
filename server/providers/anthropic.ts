@@ -1,10 +1,10 @@
-import { streamChat } from '../../src/shared/llmStream';
+import { DEFAULT_MODEL, streamChat } from '../../src/shared/llmStream';
 import type { ChatRequest, Provider, Send } from './types';
 
 export const anthropic: Provider = {
   name: 'anthropic',
   hasKey: () => Boolean(process.env.ANTHROPIC_API_KEY),
-  defaultModel: () => process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5-5',
+  defaultModel: () => process.env.ANTHROPIC_MODEL || DEFAULT_MODEL.anthropic,
 
   async stream(req: ChatRequest, send: Send, signal: AbortSignal): Promise<void> {
     const key = process.env.ANTHROPIC_API_KEY;

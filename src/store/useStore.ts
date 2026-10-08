@@ -15,12 +15,14 @@ import { LiveSource } from '../pipeline/sources/LiveSource';
 import { MockSource } from '../pipeline/sources/MockSource';
 import { deleteRun, listRuns, loadRun, saveRun, summarize, type RunSummary } from '../persistence/runs';
 import { DEFAULT_PRESET_ID, PRESETS } from '../sim/presets';
+import { DEFAULT_MODEL, keyOptional } from '../shared/llmStream';
 
 export type ExplainLevel = 'simple' | 'math';
 export type ViewMode = 'cinema' | 'detail';
 
 export const DEFAULT_SETTINGS: Settings = {
-  model: 'claude-sonnet-5-5',
+  // Empty: use the proxy's configured model (ANTHROPIC_MODEL / OPENAI_MODEL) or the provider default.
+  model: '',
   systemPrompt: 'You are a concise, friendly assistant.',
   maxTokens: 1024,
   temperature: 0.7,
@@ -106,11 +108,19 @@ export const DEFAULT_CONNECTION: Connection = {
   labUrl: 'http://localhost:8788',
 };
 
+/** The model a Live run sends when Settings leaves it empty ('' = let the proxy decide). */
+export function defaultLiveModel(health: HealthInfo | null, conn: Connection): string {
+  if (conn.mode === 'proxy') return health?.model ?? '';
+  if (conn.provider === 'anthropic') return DEFAULT_MODEL.anthropic;
+  // A local OpenAI-compatible server has no model everyone has pulled.
+  return conn.baseUrl && !/api\.openai\.com/.test(conn.baseUrl) ? '' : DEFAULT_MODEL.openai;
+}
+
 export function modeAvailability(mode: Mode, health: HealthInfo | null, conn: Connection = DEFAULT_CONNECTION): { state: Availability; detail: string } {
   if (mode === 'mock') return { state: 'ready', detail: 'Canned run — always available' };
   if (conn.mode === 'direct') {
     if (mode === 'live') {
-      return conn.apiKey || conn.provider === 'openai'
+      return conn.apiKey || (conn.provider === 'openai' && keyOptional(conn.baseUrl))
         ? { state: 'ready', detail: `${conn.provider} · direct from this browser` }
         : { state: 'unavailable', detail: 'Add your API key in Settings → Connection (stays in this browser)' };
     }
@@ -122,7 +132,13 @@ export function modeAvailability(mode: Mode, health: HealthInfo | null, conn: Co
   if (mode === 'live') {
     return health.hasKey
       ? { state: 'ready', detail: `${health.provider} · ${health.model ?? 'default model'}` }
-      : { state: 'unavailable', detail: `No API key for ${health.provider}: copy .env.example to server/.env` };
+      : {
+          state: 'unavailable',
+          detail:
+            health.provider === 'openai'
+              ? 'No API key for openai: set OPENAI_API_KEY in server/.env, or point OPENAI_BASE_URL at a local server'
+              : `No API key for ${health.provider}: copy .env.example to server/.env`,
+        };
   }
   return health.lab.ok
     ? { state: 'ready', detail: `${health.lab.model ?? 'model'} loaded (${health.lab.nLayers ?? '?'} layers)` }
@@ -207,10 +223,19 @@ export interface AppState {
 }
 
 /** Sources registered per mode. */
-export const SOURCE_FACTORIES: Record<Mode, (proxyUrl: string, conn: Connection) => EventSource> = {
+export const SOURCE_FACTORIES: Record<Mode, (proxyUrl: string, conn: Connection, health: HealthInfo | null) => EventSource> = {
   mock: () => new MockSource(),
-  live: (proxyUrl, conn) => new LiveSource({ mode: conn.mode, proxyUrl, provider: conn.provider, apiKey: conn.apiKey, baseUrl: conn.baseUrl }),
-  lab: (proxyUrl, conn) => new LabSource({ direct: conn.mode === 'direct', proxyUrl, labUrl: conn.labUrl }),
+  live: (proxyUrl, conn, health) =>
+    new LiveSource({
+      mode: conn.mode,
+      proxyUrl,
+      provider: conn.provider,
+      apiKey: conn.apiKey,
+      baseUrl: conn.baseUrl,
+      defaultModel: defaultLiveModel(health, conn),
+    }),
+  lab: (proxyUrl, conn, health) =>
+    new LabSource({ direct: conn.mode === 'direct', proxyUrl, labUrl: conn.labUrl, ...(health?.lab.model ? { model: health.lab.model } : {}) }),
 };
 
 let abortRef: AbortController | null = null;
@@ -303,8 +328,13 @@ export const useStore = create<AppState>()(
 
       mode: prefs.mode ?? 'mock',
       prompt: prefs.prompt ?? defaultPrompt,
-      // Saved prefs win, except the old 256 default, which follows the new default.
-      settings: { ...DEFAULT_SETTINGS, ...prefs.settings, ...(prefs.settings?.maxTokens === 256 ? { maxTokens: 1024 } : {}) },
+      // Saved prefs win, except old defaults (256 tokens, a fixed Claude model), which follow the new ones.
+      settings: {
+        ...DEFAULT_SETTINGS,
+        ...prefs.settings,
+        ...(prefs.settings?.maxTokens === 256 ? { maxTokens: 1024 } : {}),
+        ...(prefs.settings?.model === 'claude-sonnet-5-5' ? { model: '' } : {}),
+      },
       proxyUrl: prefs.proxyUrl ?? '/api',
       running: false,
       error: null,
@@ -361,13 +391,15 @@ export const useStore = create<AppState>()(
       send: async () => {
         const { prompt, mode, settings, proxyUrl, connection } = get();
         if (!prompt.trim()) return;
+        // The lab server may have been restarted with another model since the last check.
+        if (mode === 'lab') await get().checkHealth();
         get().stop();
         const controller = new AbortController();
         abortRef = controller;
         pending = [];
         scheduler.reset();
         set({ running: true, error: null, selectedSeq: null, focusedStage: null, historyOpen: false, attnLayer: null, samplingOverride: null });
-        const source = SOURCE_FACTORIES[mode](proxyUrl, connection);
+        const source = SOURCE_FACTORIES[mode](proxyUrl, connection, get().health);
         scheduler.play();
         let ok = false;
         try {

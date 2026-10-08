@@ -77,6 +77,26 @@ export interface LabConnection {
   direct: boolean;
   proxyUrl: string;
   labUrl: string;
+  /** Model the lab server reported in its last health check, if any. */
+  model?: string;
+}
+
+/** The server sends only the causal lower triangle (row q has q + 1 weights); pad back to square. */
+function padCausal(head: number[][], seqLen: number): number[][] {
+  return head.map((row) => (row.length >= seqLen ? row : row.concat(new Array<number>(seqLen - row.length).fill(0))));
+}
+
+async function errorDetail(res: Response): Promise<string> {
+  const raw = await res.text().catch(() => '');
+  try {
+    const parsed = JSON.parse(raw) as { error?: string; detail?: Array<{ loc?: unknown[]; msg?: string }> | string };
+    if (parsed.error) return parsed.error;
+    if (typeof parsed.detail === 'string') return parsed.detail;
+    if (Array.isArray(parsed.detail)) return parsed.detail.map((d) => `${(d.loc ?? []).slice(1).join('.')}: ${d.msg ?? ''}`).join('; ');
+  } catch {
+    /* not JSON */
+  }
+  return raw.slice(0, 300);
 }
 
 export class LabSource implements EventSource {
@@ -101,7 +121,7 @@ export class LabSource implements EventSource {
     const runId = `lab-${Date.now().toString(36)}`;
     // Small local models ramble; keep lab runs watchable.
     const maxTokens = Math.min(settings.maxTokens, 128);
-    settings = { ...settings, model: 'local lab model (distilgpt2)', maxTokens };
+    settings = { ...settings, model: `local lab model (${this.conn.model ?? 'unknown'})`, maxTokens };
     const body = buildRequestBody(prompt, settings);
     let meta: Meta | null = null;
     let promptTokens: Token[] = [];
@@ -109,6 +129,8 @@ export class LabSource implements EventSource {
     let computeSaved = 0;
     let chunkIndex = 0;
     let firstByte = false;
+    let firstTokenT: number | null = null;
+    let finished = false;
 
     push<'run_start'>('compose', 0, DUR.runStart, {
       type: 'run_start',
@@ -138,8 +160,11 @@ export class LabSource implements EventSource {
       signal,
     });
     if (!res.ok || !res.body) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`Lab server: ${res.status}${text ? ` — ${text.slice(0, 300)}` : ''}. Start it with \`npm run lab\` (lab-server/).`);
+      const detail = await errorDetail(res);
+      // 4xx from the lab server is a rejected request; anything else means it is not reachable.
+      const hint = res.status >= 400 && res.status < 500 ? '' : ' Start it with `npm run lab` (lab-server/).';
+      const msg = `Lab server: ${res.status}${detail ? ` — ${detail}` : ''}`;
+      throw new Error(`${msg}${/[.!?]$/.test(msg) ? '' : '.'}${hint}`);
     }
 
     const emitLayerPass = (
@@ -274,12 +299,15 @@ export class LabSource implements EventSource {
         }
         case 'prefill': {
           const d = JSON.parse(msg.data) as Prefill;
-          emitLayerPass('layers', 0, promptTokens.length, d.residualNorms, d.ffn, (l) => d.attentions[l] ?? [], promptTokens.map((t) => t.index), true);
+          const n = promptTokens.length;
+          emitLayerPass('layers', 0, n, d.residualNorms, d.ffn, (l) => (d.attentions[l] ?? []).map((h) => padCausal(h, n)), promptTokens.map((t) => t.index), true);
           break;
         }
         case 'step': {
           const d = JSON.parse(msg.data) as Step;
           stepsSeen = d.step + 1;
+          // The first sampled token exists here, even if it is EOS and no chunk follows.
+          if (firstTokenT === null) firstTokenT = now();
           if (d.step > 0 && d.attentions && d.residualNorms && d.ffn) {
             const att = d.attentions;
             emitLayerPass('loop', d.step, d.seqLen, d.residualNorms, d.ffn, (l) => (att[l] ?? []).map((row) => [row]), [d.seqLen - 1], false);
@@ -323,6 +351,7 @@ export class LabSource implements EventSource {
           stopReason = d.stopReason;
           usage = d.usage;
           finalText = d.text;
+          finished = true;
           break;
         }
         case 'error': {
@@ -334,18 +363,22 @@ export class LabSource implements EventSource {
       }
     }
 
+    if (signal.aborted) return;
+    if (!finished) throw new Error('Lab server closed the stream before the run finished. Check the lab server log.');
+
     const generated = context.slice(promptTokens.length);
     const step = Math.max(0, stepsSeen - 1);
-    const firstChunk = firstByte ? now() : 0;
     push<'detokenized'>('stream', step, DUR.detokenized, { type: 'detokenized', text: finalText, tokens: generated });
     const tEnd = now();
+    const ttft = firstTokenT ?? tEnd;
     push<'done'>('stream', step, DUR.done, {
       type: 'done',
       stopReason,
       usage,
-      ttftMs: firstChunk,
+      ttftMs: ttft,
       totalMs: tEnd,
-      tokensPerSec: generated.length > 1 ? (generated.length - 1) / Math.max(0.001, tEnd / 1000) : 0,
+      // Decode rate: tokens after the first, over the time after the first.
+      tokensPerSec: generated.length > 1 ? (generated.length - 1) / Math.max(0.001, (tEnd - ttft) / 1000) : 0,
     });
   }
 }
