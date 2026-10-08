@@ -133,7 +133,7 @@ export function Inspector() {
                     <h4 className="mb-1.5 text-[11px] font-semibold tracking-[0.1em] text-text-muted uppercase">
                       What's happening
                     </h4>
-                    <p className={'text-[13.5px] leading-relaxed text-text ' + (level === 'math' ? 'mono !text-[12.5px]' : '')}>
+                    <p className={'text-[13.5px] leading-relaxed text-text wrap-anywhere ' + (level === 'math' ? 'mono !text-[12.5px]' : '')}>
                       {level === 'math' ? explanation.math : explanation.simple}
                     </p>
                   </section>
